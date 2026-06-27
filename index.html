@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>מפת דירות להשכרה</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;700&display=swap');
+        body { font-family: 'Rubik', sans-serif; }
+        #map { height: 100%; width: 100%; z-index: 1; }
+
+        .workplace-pulse {
+            border-radius: 50%;
+            animation: pulse-ring 1.6s infinite;
+        }
+        @keyframes pulse-ring {
+            0%   { box-shadow: 0 0 0 0   rgba(220, 38, 38, 0.55); }
+            70%  { box-shadow: 0 0 0 12px rgba(220, 38, 38, 0); }
+            100% { box-shadow: 0 0 0 0   rgba(220, 38, 38, 0); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 h-screen overflow-hidden flex flex-col md:flex-row">
+
+    <!-- Sidebar -->
+    <div class="w-full md:w-96 bg-white shadow-xl flex flex-col z-10 h-1/2 md:h-full">
+
+        <!-- Header -->
+        <div class="p-4 border-b border-gray-100 bg-indigo-900 text-white flex-shrink-0">
+            <h1 class="text-xl font-bold flex items-center gap-2">
+                <i class="fa-solid fa-map-location-dot"></i>
+                מפת הדירות שלי
+            </h1>
+            <p class="text-xs text-indigo-200 mt-1">חיפוש דירות והערכת מרחק למקום העבודה</p>
+        </div>
+
+        <!-- Workplace info -->
+        <div class="p-3 bg-red-50 border-b border-red-100 flex items-center justify-between flex-shrink-0">
+            <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center text-white">
+                    <i class="fa-solid fa-briefcase text-sm"></i>
+                </div>
+                <div>
+                    <h2 class="text-xs font-bold text-red-900">יעד הגעה: מגדל אלון 1</h2>
+                    <p class="text-[10px] text-red-700">יגאל אלון 94, תל אביב</p>
+                </div>
+            </div>
+            <span class="text-[10px] bg-red-200 text-red-800 font-bold px-2 py-0.5 rounded-full">עבודה</span>
+        </div>
+
+        <!-- Filters -->
+        <div class="p-4 bg-gray-50 border-b border-gray-100 flex-shrink-0">
+            <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-2">סינון עיר</span>
+            <div class="grid grid-cols-4 gap-1">
+                <button onclick="filterCity('all')"          id="btn-all" class="filter-btn text-[11px] font-medium py-1.5 px-0.5 rounded-lg text-center bg-indigo-600 text-white border border-indigo-600 shadow-sm transition">הכל</button>
+                <button onclick="filterCity('תל אביב יפו')" id="btn-ta"  class="filter-btn text-[11px] font-medium py-1.5 px-0.5 rounded-lg text-center bg-white text-gray-700 border border-gray-200 hover:bg-gray-100 transition">תל אביב</button>
+                <button onclick="filterCity('רמת גן')"      id="btn-rg"  class="filter-btn text-[11px] font-medium py-1.5 px-0.5 rounded-lg text-center bg-white text-gray-700 border border-gray-200 hover:bg-gray-100 transition">רמת גן</button>
+                <button onclick="filterCity('גבעתיים')"     id="btn-gv"  class="filter-btn text-[11px] font-medium py-1.5 px-0.5 rounded-lg text-center bg-white text-gray-700 border border-gray-200 hover:bg-gray-100 transition">גבעתיים</button>
+            </div>
+
+            <div class="mt-3 flex items-center justify-between gap-3">
+                <label for="maxPrice" class="text-xs text-gray-600 whitespace-nowrap">
+                    מחיר מקסימלי: <span id="priceVal" class="font-bold text-indigo-600"></span>
+                </label>
+                <input type="range" id="maxPrice" min="4000" step="100"
+                       class="w-1/2 accent-indigo-600" oninput="updatePriceFilter(this.value)">
+            </div>
+
+            <!-- Transit layer toggles -->
+            <div class="mt-3 flex items-center gap-2">
+                <span class="text-xs text-gray-500 font-medium ml-1">תחנות:</span>
+                <button onclick="toggleLayer('rail')" id="btn-rail"
+                        class="transit-btn text-[11px] font-medium py-1 px-2 rounded-lg flex items-center gap-1 bg-green-700 text-white border border-green-700 shadow-sm transition">
+                    <i class="fa-solid fa-train" style="font-size:10px;"></i> רכבת
+                </button>
+                <button onclick="toggleLayer('tram')" id="btn-tram"
+                        class="transit-btn text-[11px] font-medium py-1 px-2 rounded-lg flex items-center gap-1 bg-purple-700 text-white border border-purple-700 shadow-sm transition">
+                    <i class="fa-solid fa-tram" style="font-size:10px;"></i> רכבת קלה
+                </button>
+                <span id="transit-status" class="text-[10px] text-gray-400 mr-1">טוען...</span>
+            </div>
+        </div>
+
+        <!-- Apartment list -->
+        <div id="apartment-list" class="flex-1 overflow-y-auto divide-y divide-gray-100"></div>
+
+        <!-- Footer -->
+        <div class="p-3 bg-gray-50 border-t border-gray-100 text-center text-xs text-gray-500 flex-shrink-0">
+            נמצאו <span id="listings-count" class="font-bold text-indigo-600">0</span> דירות רלוונטיות
+        </div>
+    </div>
+
+    <!-- Map — dir="ltr" isolates Leaflet from RTL document direction -->
+    <div class="flex-1 h-1/2 md:h-full relative" dir="ltr">
+        <div id="map"></div>
+    </div>
+
+<script>
+    const WORKPLACE_COORDS = [32.06849, 34.79414];
+
+    // Coordinates geocoded via Nominatim/OSM (not Gemini-generated)
+    const APARTMENTS_DATA = [
+        {
+            id: 1,
+            address: "הורדים 11, גבעתיים",
+            neighborhood: "שכונת הל\"ה",
+            city: "גבעתיים",
+            price: 5500,
+            details: "דירת מגורים",
+            coords: [32.0737, 34.8020],
+            link: "https://www.yad2.co.il/realestate/item/mrpneapg",
+            contact: "מודעה פעילה"
+        },
+        {
+            id: 2,
+            address: "התע\"ש 2, גבעתיים",
+            neighborhood: "שכונת הל\"ה",
+            city: "גבעתיים",
+            price: 5650,
+            details: "2.5 חדרים, קומה 3",
+            coords: [32.0741, 34.8024],
+            link: "https://www.yad2.co.il/realestate/item/w8wcnrtu",
+            contact: "נועם - 073-7821829"
+        },
+        {
+            id: 3,
+            address: "הורדים 4, גבעתיים",
+            neighborhood: "שכונת הל\"ה",
+            city: "גבעתיים",
+            price: 6200,
+            details: "2 חדרים, קומה 1",
+            coords: [32.0733, 34.8016],
+            link: "https://www.yad2.co.il/realestate/item/2bsdrbpo",
+            contact: "חסי - 073-7834105"
+        },
+        {
+            id: 4,
+            address: "דרך זאב ז'בוטינסקי 63, רמת גן",
+            neighborhood: "שכונת גפן",
+            city: "רמת גן",
+            price: 4300,
+            details: "2 חדרים, קומה 3",
+            coords: [32.0870, 34.8141],
+            link: "https://www.yad2.co.il/realestate/item/xmwhdu18",
+            contact: "אידלסון נכסים - 053-6834283"
+        },
+        {
+            id: 5,
+            address: "הדר, רמת גן",
+            neighborhood: "שכונת גפן",
+            city: "רמת גן",
+            price: 5500,
+            details: "2.5 חדרים",
+            coords: [32.0876, 34.8120],
+            link: "https://www.yad2.co.il/realestate/item/kuj62zcs",
+            contact: "מור נכסים - 055-4368253"
+        },
+        {
+            id: 6,
+            address: "דב פרידמן 9, רמת גן",
+            neighborhood: "שכונת הראשונים",
+            city: "רמת גן",
+            price: 4800,
+            details: "2 חדרים",
+            coords: [32.0814, 34.8020],
+            link: "https://www.yad2.co.il/realestate/item/wc2qki6v",
+            contact: "יעל - 055-4345169"
+        },
+        {
+            id: 7,
+            address: "זוהר, רמת גן",
+            neighborhood: "שכונת בן גוריון / מרכז ג'",
+            city: "רמת גן",
+            price: 6000,
+            details: "דירה מרווחת",
+            coords: [32.0876, 34.8138],
+            link: "https://www.yad2.co.il/realestate/item/lycnw0rt",
+            contact: "י.ר יוסף נדל\"ן - 055-4360454"
+        },
+        {
+            id: 8,
+            address: "דרך זאב ז'בוטינסקי 7, רמת גן",
+            neighborhood: "הבורסה",
+            city: "רמת גן",
+            price: 6600,
+            details: "2 חדרים, קומה 32",
+            coords: [32.0834, 34.8037],
+            link: "https://www.yad2.co.il/realestate/item/fixz8tyj",
+            contact: "אריאל - 073-7823260"
+        },
+        {
+            id: 9,
+            address: "המסגר 68, תל אביב יפו",
+            neighborhood: "מונטיפיורי",
+            city: "תל אביב יפו",
+            price: 5350,
+            details: "דירת מגורים",
+            coords: [32.0680, 34.7874],
+            link: "https://www.yad2.co.il/realestate/item/oxnzsu41",
+            contact: "אורלי - 052-5053002"
+        },
+        {
+            id: 10,
+            address: "נהרדעא, תל אביב יפו",
+            neighborhood: "הצפון החדש - דרום",
+            city: "תל אביב יפו",
+            price: 5500,
+            details: "דירת איכות",
+            coords: [32.0830, 34.7858],
+            link: "https://www.yad2.co.il/realestate/item/u267nfi6",
+            contact: "סטוקהאוס נכסים - 055-4516602"
+        },
+        {
+            id: 11,
+            address: "לינקולן, תל אביב יפו",
+            neighborhood: "לב תל אביב",
+            city: "תל אביב יפו",
+            price: 5600,
+            details: "לב העיר צפון",
+            coords: [32.0678, 34.7802],
+            link: "https://www.yad2.co.il/realestate/item/61lfse7h",
+            contact: "אחיה אורן שיווק נדלן - 055-4360143"
+        },
+        {
+            id: 12,
+            address: "וילסון, תל אביב יפו",
+            neighborhood: "לב תל אביב",
+            city: "תל אביב יפו",
+            price: 5600,
+            details: "לב העיר צפון",
+            coords: [32.0661, 34.7804],
+            link: "https://www.yad2.co.il/realestate/item/s44meiv5",
+            contact: "אחיה אורן שיווק נדלן - 055-4360143"
+        },
+        {
+            id: 13,
+            address: "הגדוד העברי 16, תל אביב יפו",
+            neighborhood: "נווה שאנן",
+            city: "תל אביב יפו",
+            price: 6000,
+            details: "2 חדרים",
+            coords: [32.0600, 34.7755],
+            link: "https://www.yad2.co.il/realestate/item/hl09owui",
+            contact: "שרון - 073-7836258"
+        },
+        {
+            id: 14,
+            address: "בנימיני 20, תל אביב יפו",
+            neighborhood: "נחלת יצחק",
+            city: "תל אביב יפו",
+            price: 6200,
+            details: "2.5 חדרים",
+            coords: [32.0783, 34.7991],
+            link: "https://www.yad2.co.il/realestate/item/9q4c48fz",
+            contact: "אייל - 054-4753429"
+        },
+        {
+            id: 15,
+            address: "יגאל אלון 154, תל אביב יפו",
+            neighborhood: "נחלת יצחק",
+            city: "תל אביב יפו",
+            price: 7000,
+            details: "3 חדרים",
+            coords: [32.0772, 34.7967],
+            link: "https://www.yad2.co.il/realestate/item/j6j38nfc",
+            contact: "אברהם - 054-6444160"
+        },
+        {
+            id: 16,
+            address: "שפרינצק 1, תל אביב יפו",
+            neighborhood: "גני שרונה",
+            city: "תל אביב יפו",
+            price: 6900,
+            details: "קרית הממשלה",
+            coords: [32.0708, 34.7827],
+            link: "https://www.yad2.co.il/realestate/item/8a8tmcog",
+            contact: "אביב - 050-8237070"
+        }
+    ];
+
+    const MAX_PRICE = Math.max(...APARTMENTS_DATA.map(a => a.price));
+    const SLIDER_MAX = MAX_PRICE + 500;
+    const sliderEl = document.getElementById('maxPrice');
+    sliderEl.max = SLIDER_MAX;
+    sliderEl.value = SLIDER_MAX;
+    let currentMaxPrice = SLIDER_MAX;
+    document.getElementById('priceVal').innerText = 'הכל';
+
+    function calculateDistance(coords1, coords2) {
+        const [lat1, lon1] = coords1;
+        const [lat2, lon2] = coords2;
+        const R = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) ** 2 +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                  Math.sin(dLon / 2) ** 2;
+        const roadKm = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) * 1.4;
+        return { km: roadKm.toFixed(1), mins: Math.round((roadKm / 25) * 60) };
+    }
+
+    // ── Map ──────────────────────────────────────────────────────────────────
+    const map = L.map('map').setView(WORKPLACE_COORDS, 13);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+    }).addTo(map);
+
+    // ── Icons ────────────────────────────────────────────────────────────────
+    function makeIcon(bg, faClass, size, pulse) {
+        return L.divIcon({
+            className: pulse ? 'workplace-pulse' : '',
+            html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${bg};border:2px solid white;display:flex;align-items:center;justify-content:center;color:white;box-shadow:0 2px 6px rgba(0,0,0,0.3);">
+                       <i class="${faClass}" style="font-size:${Math.round(size*0.38)}px;"></i>
+                   </div>`,
+            iconSize: [size, size],
+            iconAnchor: [size / 2, size / 2],
+            popupAnchor: [0, -size / 2 - 4]
+        });
+    }
+
+    const workplaceIcon  = makeIcon('#dc2626', 'fa-solid fa-briefcase', 36, true);
+    const apartmentIcon  = makeIcon('#4f46e5', 'fa-solid fa-house',     32, false);
+    const railIcon       = makeIcon('#15803d', 'fa-solid fa-train',     24, false);
+    const tramIcon       = makeIcon('#7c3aed', 'fa-solid fa-tram',      24, false);
+
+    // ── Layer groups ─────────────────────────────────────────────────────────
+    const apartmentLayer = L.layerGroup().addTo(map);
+    const railLayer      = L.layerGroup().addTo(map);
+    const tramLayer      = L.layerGroup().addTo(map);
+
+    const layerState = { rail: true, tram: true };
+
+    // Workplace pin — always visible
+    L.marker(WORKPLACE_COORDS, { icon: workplaceIcon })
+        .bindPopup(`<div style="text-align:right;font-family:Rubik,sans-serif;padding:4px;">
+            <strong style="color:#dc2626;font-size:13px;">מקום עבודה: מגדל אלון 1</strong><br>
+            <span style="font-size:11px;color:#6b7280;">יגאל אלון 94, תל אביב</span>
+        </div>`)
+        .addTo(map);
+
+    // ── Apartment list + markers ──────────────────────────────────────────────
+    let currentCityFilter = 'all';
+
+    function buildApp() {
+        apartmentLayer.clearLayers();
+        const listEl = document.getElementById('apartment-list');
+        listEl.innerHTML = '';
+
+        const visible = APARTMENTS_DATA
+            .filter(a => (currentCityFilter === 'all' || a.city === currentCityFilter) && a.price <= currentMaxPrice)
+            .sort((a, b) => a.price - b.price);
+
+        document.getElementById('listings-count').innerText = visible.length;
+
+        if (visible.length === 0) {
+            listEl.innerHTML = `<div class="p-8 text-center text-gray-400">
+                <i class="fa-solid fa-magnifying-glass text-3xl mb-2"></i>
+                <p class="text-sm">לא נמצאו דירות התואמות את הסינון</p>
+            </div>`;
+            return;
+        }
+
+        const bounds = [WORKPLACE_COORDS];
+
+        visible.forEach(apt => {
+            const dist = calculateDistance(apt.coords, WORKPLACE_COORDS);
+            bounds.push(apt.coords);
+
+            const popup = `<div style="text-align:right;font-family:Rubik,sans-serif;max-width:240px;padding:4px;">
+                <span style="display:inline-block;background:#e0e7ff;color:#3730a3;font-size:10px;font-weight:700;padding:1px 8px;border-radius:999px;margin-bottom:4px;">${apt.city} | ${apt.neighborhood}</span>
+                <div style="font-weight:700;font-size:13px;margin-bottom:2px;">${apt.address}</div>
+                <div style="font-size:11px;color:#6b7280;margin-bottom:2px;">${apt.details}</div>
+                <div style="font-size:12px;font-weight:700;color:#4f46e5;margin-bottom:6px;">₪${apt.price.toLocaleString()}</div>
+                <div style="border-top:1px solid #f3f4f6;padding-top:6px;display:flex;justify-content:space-between;align-items:center;font-size:10px;color:#9ca3af;">
+                    <span><i class="fa-solid fa-car" style="color:#ef4444;margin-left:3px;"></i>~${dist.km} ק"מ (~${dist.mins} דק')</span>
+                    <a href="${apt.link}" target="_blank" style="color:#4f46e5;font-weight:600;text-decoration:none;">Yad2 &rarr;</a>
+                </div>
+            </div>`;
+
+            const marker = L.marker(apt.coords, { icon: apartmentIcon })
+                .bindPopup(popup)
+                .addTo(apartmentLayer);
+
+            const card = document.createElement('div');
+            card.className = 'p-4 hover:bg-indigo-50/50 cursor-pointer transition border-b border-gray-100 flex justify-between items-start gap-3 group';
+            card.onclick = () => { map.setView(apt.coords, 15); marker.openPopup(); };
+            card.innerHTML = `
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-1.5 mb-1 flex-wrap">
+                        <span class="bg-gray-100 text-gray-800 text-[10px] px-1.5 py-0.5 rounded-md font-medium">${apt.city}</span>
+                        <span class="bg-indigo-50 text-indigo-700 text-[10px] px-1.5 py-0.5 rounded-md font-medium">${apt.neighborhood}</span>
+                    </div>
+                    <h3 class="font-bold text-sm text-gray-900 truncate group-hover:text-indigo-900">${apt.address}</h3>
+                    <p class="text-xs text-gray-500 mt-0.5 truncate">${apt.details}</p>
+                    <div class="mt-2 flex items-center gap-4 text-xs text-gray-500">
+                        <span><i class="fa-solid fa-car text-red-400 ml-1"></i>~${dist.km} ק"מ (~${dist.mins} דק')</span>
+                    </div>
+                </div>
+                <div class="flex flex-col justify-between items-end min-h-[70px]">
+                    <span class="text-sm font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-1 rounded-lg">₪${apt.price.toLocaleString()}</span>
+                    <a href="${apt.link}" target="_blank" onclick="event.stopPropagation();"
+                       class="text-[10px] text-gray-400 hover:text-indigo-600 transition flex items-center gap-1 mt-2">
+                        Yad2 <i class="fa-solid fa-up-right-from-square text-[9px]"></i>
+                    </a>
+                </div>
+            `;
+            listEl.appendChild(card);
+        });
+
+        if (bounds.length > 1) {
+            map.fitBounds(L.latLngBounds(bounds), { padding: [50, 50], maxZoom: 15 });
+        }
+    }
+
+    // ── Filters ──────────────────────────────────────────────────────────────
+    const CITY_BTN = { 'all': 'btn-all', 'תל אביב יפו': 'btn-ta', 'רמת גן': 'btn-rg', 'גבעתיים': 'btn-gv' };
+    const BTN_ACTIVE = 'filter-btn text-[11px] font-medium py-1.5 px-0.5 rounded-lg text-center bg-indigo-600 text-white border border-indigo-600 shadow-sm transition';
+    const BTN_IDLE   = 'filter-btn text-[11px] font-medium py-1.5 px-0.5 rounded-lg text-center bg-white text-gray-700 border border-gray-200 hover:bg-gray-100 transition';
+
+    function filterCity(city) {
+        currentCityFilter = city;
+        document.querySelectorAll('.filter-btn').forEach(b => b.className = BTN_IDLE);
+        document.getElementById(CITY_BTN[city]).className = BTN_ACTIVE;
+        buildApp();
+    }
+
+    function updatePriceFilter(val) {
+        currentMaxPrice = parseInt(val);
+        document.getElementById('priceVal').innerText =
+            currentMaxPrice >= SLIDER_MAX ? 'הכל' : `${currentMaxPrice.toLocaleString()} ₪`;
+        buildApp();
+    }
+
+    // ── Transit layer toggle ──────────────────────────────────────────────────
+    function toggleLayer(type) {
+        layerState[type] = !layerState[type];
+        const layer = type === 'rail' ? railLayer : tramLayer;
+        const btn   = document.getElementById(`btn-${type}`);
+        const color = type === 'rail' ? '#15803d' : '#7c3aed';
+
+        if (layerState[type]) {
+            map.addLayer(layer);
+            btn.style.background = color;
+            btn.style.color = 'white';
+            btn.style.borderColor = color;
+        } else {
+            map.removeLayer(layer);
+            btn.style.background = 'white';
+            btn.style.color = '#6b7280';
+            btn.style.borderColor = '#e5e7eb';
+        }
+    }
+
+    // ── Transit stations via Overpass ─────────────────────────────────────────
+    async function loadTransitStations() {
+        const statusEl = document.getElementById('transit-status');
+        try {
+            const query = `[out:json][timeout:25];
+(
+  node["railway"~"^(station|halt)$"](31.97,34.74,32.13,34.90);
+  node["railway"="tram_stop"](31.97,34.74,32.13,34.90);
+);
+out body;`;
+
+            const resp = await fetch('https://overpass-api.de/api/interpreter', {
+                method: 'POST',
+                body: 'data=' + encodeURIComponent(query)
+            });
+            const data = await resp.json();
+            const nodes = data.elements || [];
+
+            let railCount = 0, tramCount = 0;
+
+            nodes.forEach(node => {
+                const tags = node.tags || {};
+                const name = tags.name || tags['name:he'] || '';
+                if (!name) return;
+
+                const isLightRail = tags.railway === 'tram_stop' ||
+                                    tags.light_rail === 'yes' ||
+                                    (tags.network || '').includes('Light Rail') ||
+                                    (tags.network || '').includes('קלה');
+
+                const coords = [node.lat, node.lon];
+
+                if (isLightRail) {
+                    const popup = `<div style="text-align:right;font-family:Rubik,sans-serif;padding:4px;">
+                        <span style="display:inline-block;background:#ede9fe;color:#6d28d9;font-size:10px;font-weight:700;padding:1px 8px;border-radius:999px;margin-bottom:4px;">רכבת קלה</span><br>
+                        <strong style="font-size:12px;">${name}</strong>
+                    </div>`;
+                    L.marker(coords, { icon: tramIcon }).bindPopup(popup).addTo(tramLayer);
+                    tramCount++;
+                } else {
+                    const popup = `<div style="text-align:right;font-family:Rubik,sans-serif;padding:4px;">
+                        <span style="display:inline-block;background:#dcfce7;color:#166534;font-size:10px;font-weight:700;padding:1px 8px;border-radius:999px;margin-bottom:4px;">רכבת ישראל</span><br>
+                        <strong style="font-size:12px;">${name}</strong>
+                    </div>`;
+                    L.marker(coords, { icon: railIcon }).bindPopup(popup).addTo(railLayer);
+                    railCount++;
+                }
+            });
+
+            statusEl.innerText = `${railCount} רכבת, ${tramCount} קלה`;
+        } catch (e) {
+            statusEl.innerText = 'שגיאה בטעינה';
+            console.error('Transit load failed:', e);
+        }
+    }
+
+    // ── Init ──────────────────────────────────────────────────────────────────
+    buildApp();
+    loadTransitStations();
+</script>
+</body>
+</html>
