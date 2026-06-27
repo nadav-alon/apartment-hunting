@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;700&display=swap');
         body { font-family: 'Rubik', sans-serif; }
@@ -43,6 +44,11 @@
                 <button onclick="exportData()" title="ייצוא JSON"
                         class="w-8 h-8 rounded-lg bg-white/20 hover:bg-white/30 flex items-center justify-center transition">
                     <i class="fa-solid fa-file-export text-sm"></i>
+                </button>
+                <button onclick="openSyncModal()" id="btn-sync" title="סנכרון בין מכשירים"
+                        class="w-8 h-8 rounded-lg bg-white/20 hover:bg-white/30 flex items-center justify-center transition relative">
+                    <i class="fa-solid fa-cloud text-sm"></i>
+                    <span id="sync-dot" class="hidden absolute top-0.5 right-0.5 w-2 h-2 rounded-full border border-indigo-900"></span>
                 </button>
             </div>
         </div>
@@ -297,6 +303,47 @@
   </div>
 </div>
 
+<!-- ── Sync Modal ─────────────────────────────────────────────────────────── -->
+<div id="modal-sync" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onclick="if(event.target===this)closeSyncModal()">
+  <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm" dir="rtl">
+    <div class="p-4 bg-indigo-900 text-white rounded-t-xl flex items-center justify-between">
+      <h2 class="font-bold text-sm">סנכרון בין מכשירים</h2>
+      <button onclick="closeSyncModal()" class="text-indigo-200 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+    </div>
+    <div class="p-4 space-y-4">
+      <!-- Token setup -->
+      <div>
+        <div class="text-xs font-bold text-gray-500 mb-1">GitHub Token <span class="font-normal text-gray-400">(scope: gist)</span></div>
+        <div class="flex gap-2">
+          <input id="sync-token-input" type="password" placeholder="ghp_xxxx..." dir="ltr"
+                 class="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+          <button onclick="setupSync()"
+                  class="bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm hover:bg-indigo-700 transition whitespace-nowrap">
+            הגדר
+          </button>
+        </div>
+        <div id="sync-setup-status" class="text-[11px] mt-1 min-h-[1rem]"></div>
+      </div>
+      <!-- QR code -->
+      <div id="sync-qr-section" class="hidden text-center">
+        <div class="text-xs font-bold text-gray-500 mb-2">סרוק ממכשיר נוסף</div>
+        <div id="sync-qr" class="inline-block p-2 border rounded-lg bg-white"></div>
+        <div class="text-[11px] text-gray-400 mt-2">הקוד מכיל את הטוקן ו-Gist ID — אל תשתף עם אחרים</div>
+      </div>
+      <!-- Connected status + disconnect -->
+      <div id="sync-connected-section" class="hidden">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2 text-sm text-gray-600">
+            <i class="fa-solid fa-circle-check text-green-500"></i>
+            <span id="sync-gist-label"></span>
+          </div>
+          <button onclick="disconnectSync()" class="text-[11px] text-red-400 hover:text-red-600">נתק</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 // ── Constants ─────────────────────────────────────────────────────────────
 const WORKPLACE_COORDS = [32.06849, 34.79414];
@@ -351,6 +398,7 @@ function initDefaults() {
 
 function saveApartments(data) {
     localStorage.setItem(DATA_KEY, JSON.stringify(data));
+    gistWrite(data);
 }
 
 function exportData() {
@@ -1090,9 +1138,153 @@ function resetToDefaults() {
     buildApp();
 }
 
+// ── Gist sync ─────────────────────────────────────────────────────────────
+const SYNC_KEY = 'apt-sync-v1';
+const GIST_FILE = 'apartments.json';
+const GIST_DESC = 'apartment-hunting-sync';
+
+function getSyncConfig() { try { return JSON.parse(localStorage.getItem(SYNC_KEY)); } catch { return null; } }
+function setSyncConfig(cfg) { cfg ? localStorage.setItem(SYNC_KEY, JSON.stringify(cfg)) : localStorage.removeItem(SYNC_KEY); }
+
+function syncDot(state) { // 'ok' | 'syncing' | 'error' | 'off'
+    const colors = { ok: '#34d399', syncing: '#93c5fd', error: '#f87171', off: '' };
+    const dot = document.getElementById('sync-dot');
+    if (state === 'off') { dot.classList.add('hidden'); return; }
+    dot.classList.remove('hidden');
+    dot.style.background = colors[state];
+}
+
+function gistHeaders(token) {
+    return { Authorization: `token ${token}`, 'Content-Type': 'application/json', 'User-Agent': 'apartment-hunter/1.0' };
+}
+
+async function gistWrite(apts) {
+    const cfg = getSyncConfig();
+    if (!cfg) return;
+    syncDot('syncing');
+    try {
+        const r = await fetch(`https://api.github.com/gists/${cfg.gistId}`, {
+            method: 'PATCH',
+            headers: gistHeaders(cfg.token),
+            body: JSON.stringify({ files: { [GIST_FILE]: { content: JSON.stringify(apts) } } })
+        });
+        syncDot(r.ok ? 'ok' : 'error');
+    } catch { syncDot('error'); }
+}
+
+async function gistRead() {
+    const cfg = getSyncConfig();
+    if (!cfg) return null;
+    syncDot('syncing');
+    try {
+        const r = await fetch(`https://api.github.com/gists/${cfg.gistId}`, { headers: gistHeaders(cfg.token) });
+        if (!r.ok) { syncDot('error'); return null; }
+        const data = await r.json();
+        const content = data.files?.[GIST_FILE]?.content;
+        if (!content) { syncDot('error'); return null; }
+        syncDot('ok');
+        return JSON.parse(content);
+    } catch { syncDot('error'); return null; }
+}
+
+async function syncFromGist() {
+    const remote = await gistRead();
+    if (!remote) return;
+    localStorage.setItem(DATA_KEY, JSON.stringify(remote));
+    buildApp(false);
+}
+
+async function findOrCreateGist(token) {
+    const h = gistHeaders(token);
+    const list = await fetch('https://api.github.com/gists?per_page=100', { headers: h }).then(r => r.json());
+    if (!Array.isArray(list)) throw new Error('טוקן לא תקין');
+    const existing = list.find(g => g.description === GIST_DESC);
+    if (existing) return existing.id;
+    const created = await fetch('https://api.github.com/gists', {
+        method: 'POST', headers: h,
+        body: JSON.stringify({ description: GIST_DESC, public: false, files: { [GIST_FILE]: { content: JSON.stringify(loadApartments()) } } })
+    }).then(r => r.json());
+    if (!created.id) throw new Error('יצירת Gist נכשלה');
+    return created.id;
+}
+
+let _qr = null;
+function renderSyncQR(token, gistId) {
+    const section = document.getElementById('sync-qr-section');
+    section.classList.remove('hidden');
+    const div = document.getElementById('sync-qr');
+    div.innerHTML = '';
+    _qr = null;
+    const url = `${location.origin}${location.pathname}#sync=${token}:${gistId}`;
+    _qr = new QRCode(div, { text: url, width: 200, height: 200, correctLevel: QRCode.CorrectLevel.M });
+}
+
+function renderSyncConnected(gistId) {
+    document.getElementById('sync-connected-section').classList.remove('hidden');
+    document.getElementById('sync-gist-label').textContent = `מחובר · Gist: ${gistId.slice(0, 8)}…`;
+}
+
+async function setupSync() {
+    const token = document.getElementById('sync-token-input').value.trim();
+    if (!token) return;
+    const st = document.getElementById('sync-setup-status');
+    st.style.color = '#6b7280'; st.textContent = 'מחפש Gist...';
+    try {
+        const gistId = await findOrCreateGist(token);
+        setSyncConfig({ token, gistId });
+        st.style.color = '#059669'; st.textContent = '✓ מחובר';
+        renderSyncQR(token, gistId);
+        renderSyncConnected(gistId);
+        syncDot('ok');
+    } catch(e) { st.style.color = '#ef4444'; st.textContent = e.message; }
+}
+
+function disconnectSync() {
+    setSyncConfig(null);
+    document.getElementById('sync-qr-section').classList.add('hidden');
+    document.getElementById('sync-connected-section').classList.add('hidden');
+    document.getElementById('sync-token-input').value = '';
+    document.getElementById('sync-setup-status').textContent = '';
+    syncDot('off');
+}
+
+function openSyncModal() {
+    const cfg = getSyncConfig();
+    if (cfg) {
+        document.getElementById('sync-token-input').value = cfg.token;
+        renderSyncQR(cfg.token, cfg.gistId);
+        renderSyncConnected(cfg.gistId);
+    }
+    document.getElementById('modal-sync').classList.remove('hidden');
+}
+function closeSyncModal() { document.getElementById('modal-sync').classList.add('hidden'); }
+
 // ── Init ──────────────────────────────────────────────────────────────────
-buildApp();
-loadTransitStations();
+(async function init() {
+    // Handle QR scan: #sync=TOKEN:GISTID
+    const hash = location.hash;
+    if (hash.startsWith('#sync=')) {
+        const raw = decodeURIComponent(hash.slice(6));
+        const sep = raw.indexOf(':');
+        if (sep > 0) {
+            setSyncConfig({ token: raw.slice(0, sep), gistId: raw.slice(sep + 1) });
+            history.replaceState(null, '', location.pathname);
+        }
+    }
+
+    // Pull from Gist before first render
+    const remote = await gistRead();
+    if (remote) localStorage.setItem(DATA_KEY, JSON.stringify(remote));
+    if (!getSyncConfig()) syncDot('off');
+
+    buildApp();
+    loadTransitStations();
+
+    // Re-pull on tab focus (other device may have written)
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') syncFromGist();
+    });
+})();
 </script>
 </body>
 </html>
