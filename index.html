@@ -65,10 +65,18 @@
 
     <!-- Filters -->
     <div class="p-3 bg-gray-50 border-b border-gray-100 flex-shrink-0 space-y-2.5">
+        <!-- Search -->
+        <input id="search-input" type="text" placeholder="חיפוש לפי כתובת, שכונה, עיר..."
+               oninput="updateSearch(this.value)"
+               class="w-full border rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
+
+        <!-- City -->
         <div>
             <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">עיר</div>
             <div class="grid grid-cols-4 gap-1" id="city-filter-btns"></div>
         </div>
+
+        <!-- Price -->
         <div class="flex items-center justify-between gap-3">
             <label for="maxPrice" class="text-xs text-gray-600 whitespace-nowrap">
                 מחיר: <span id="priceVal" class="font-bold text-indigo-600"></span>
@@ -76,6 +84,22 @@
             <input type="range" id="maxPrice" min="1000" step="100"
                    class="w-1/2 accent-indigo-600" oninput="updatePriceFilter(this.value)">
         </div>
+
+        <!-- Status filter -->
+        <div>
+            <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">סטטוס</div>
+            <div class="flex gap-1 flex-wrap" id="status-filter-btns"></div>
+        </div>
+
+        <!-- Visit date quick filter -->
+        <div class="flex items-center gap-2">
+            <button onclick="toggleVisitingToday()" id="btn-visiting-today"
+                    class="text-[11px] font-medium py-1 px-2.5 rounded-lg border transition flex items-center gap-1 bg-white text-gray-600 border-gray-200 hover:bg-gray-100">
+                <i class="fa-solid fa-calendar-day" style="font-size:10px;"></i> ביקור היום
+            </button>
+        </div>
+
+        <!-- Transit -->
         <div class="flex items-center gap-2">
             <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">תחנות:</span>
             <button onclick="toggleLayer('rail')" id="btn-rail"
@@ -146,6 +170,10 @@
           </button>
           <span id="geocode-status" class="text-[11px] text-gray-500 min-w-0 break-words"></span>
         </div>
+        <!-- Paste Google Maps coords or "lat, lon" string -->
+        <input id="f-coords-paste" type="text" placeholder='הדבק מ-Google Maps: "32.0680, 34.7874"' dir="ltr"
+               oninput="parsePastedCoords(this.value)"
+               class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
         <div class="grid grid-cols-2 gap-2">
           <input id="f-lat" type="number" step="any" placeholder="Latitude (32.xxx)" dir="ltr"
                  class="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
@@ -181,8 +209,13 @@
         <div class="grid grid-cols-4 gap-1.5" id="status-buttons"></div>
       </div>
       <div>
+        <div class="text-xs font-bold text-gray-500 mb-1.5">תאריך ביקור</div>
+        <input type="date" id="visit-date"
+               class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+      </div>
+      <div>
         <div class="text-xs font-bold text-gray-500 mb-1.5">הערות</div>
-        <textarea id="notes-text" rows="4" placeholder="הערות, רשמים, שאלות..."
+        <textarea id="notes-text" rows="3" placeholder="הערות, רשמים, שאלות..."
                   class="w-full border rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400"></textarea>
       </div>
       <div class="flex gap-2">
@@ -334,8 +367,47 @@ L.marker(WORKPLACE_COORDS, { icon: workplaceIcon })
         <span style="font-size:11px;color:#6b7280;">יגאל אלון 94, תל אביב</span></div>`)
     .addTo(map);
 
+// ── Filter state ──────────────────────────────────────────────────────────
+let currentCityFilter  = 'all';
+let searchQuery        = '';
+let selectedStatuses   = new Set(); // empty = show all statuses
+let visitingTodayOnly  = false;
+
+function today() { return new Date().toISOString().slice(0, 10); }
+function formatDate(d) { if (!d) return ''; const [y,m,dd]=d.split('-'); return `${dd}.${m}.${y}`; }
+
+function updateSearch(val) { searchQuery = val.trim(); buildApp(false); }
+
+function toggleVisitingToday() {
+    visitingTodayOnly = !visitingTodayOnly;
+    const btn = document.getElementById('btn-visiting-today');
+    Object.assign(btn.style, visitingTodayOnly
+        ? { background:'#059669', color:'white', borderColor:'#059669' }
+        : { background:'white',   color:'#4b5563', borderColor:'#e5e7eb' });
+    buildApp(false);
+}
+
+function renderStatusFilterButtons() {
+    const container = document.getElementById('status-filter-btns');
+    container.innerHTML = '';
+    STATUSES.forEach(s => {
+        const isActive = selectedStatuses.has(s.value);
+        const btn = document.createElement('button');
+        btn.className = 'text-[11px] font-medium py-0.5 px-2 rounded-lg border transition flex items-center gap-1';
+        Object.assign(btn.style, isActive
+            ? { background: s.bg, color: 'white', borderColor: s.bg }
+            : { background: 'white', color: '#4b5563', borderColor: '#e5e7eb' });
+        btn.innerHTML = `<i class="fa-solid ${s.icon}" style="font-size:9px;"></i>${s.label}`;
+        btn.onclick = () => {
+            selectedStatuses.has(s.value) ? selectedStatuses.delete(s.value) : selectedStatuses.add(s.value);
+            renderStatusFilterButtons();
+            buildApp(false);
+        };
+        container.appendChild(btn);
+    });
+}
+
 // ── City filter buttons (dynamic) ─────────────────────────────────────────
-let currentCityFilter = 'all';
 const KNOWN_CITIES = ['תל אביב יפו', 'רמת גן', 'גבעתיים'];
 
 function rebuildCityFilter(apts) {
@@ -392,15 +464,25 @@ function buildApp(fitMap = true) {
     const apts = loadApartments();
     syncSlider(apts);
     rebuildCityFilter(apts);
+    renderStatusFilterButtons();
     apartmentLayer.clearLayers();
 
     const listEl = document.getElementById('apartment-list');
     listEl.innerHTML = '';
+    const todayStr = today();
 
-    const visible = apts
-        .filter(a => (currentCityFilter === 'all' || a.city === currentCityFilter)
-                  && (currentMaxPrice === Infinity || a.price <= currentMaxPrice))
-        .sort((a, b) => a.price - b.price);
+    const visible = apts.filter(a => {
+        if (currentCityFilter !== 'all' && a.city !== currentCityFilter) return false;
+        if (currentMaxPrice !== Infinity && a.price > currentMaxPrice) return false;
+        if (selectedStatuses.size > 0 && !selectedStatuses.has(a.status)) return false;
+        if (visitingTodayOnly && a.visitDate !== todayStr) return false;
+        if (searchQuery) {
+            const q = searchQuery.toLowerCase();
+            if (![a.address, a.neighborhood, a.city, a.details, a.contact, a.notes]
+                    .some(f => f && f.toLowerCase().includes(q))) return false;
+        }
+        return true;
+    }).sort((a, b) => a.price - b.price);
 
     document.getElementById('listings-count').innerText = visible.length;
 
@@ -414,9 +496,10 @@ function buildApp(fitMap = true) {
     const bounds = [WORKPLACE_COORDS];
 
     visible.forEach(apt => {
-        const dist  = calcDist(apt.coords, WORKPLACE_COORDS);
-        const sc    = STATUSES.find(s => s.value === apt.status) || STATUSES[0];
+        const dist     = calcDist(apt.coords, WORKPLACE_COORDS);
+        const sc       = STATUSES.find(s => s.value === apt.status) || STATUSES[0];
         const hasNotes = apt.notes && apt.notes.trim().length > 0;
+        const isToday  = apt.visitDate === todayStr;
         bounds.push(apt.coords);
 
         // Map marker — color reflects status
@@ -453,6 +536,8 @@ function buildApp(fitMap = true) {
                 <div class="font-bold text-sm text-gray-900 truncate group-hover:text-indigo-900">${apt.address}</div>
                 <div class="text-xs text-gray-500 truncate">${apt.details || ''}</div>
                 ${hasNotes ? `<div class="text-[10px] text-amber-600 mt-0.5 truncate"><i class="fa-solid fa-note-sticky mr-0.5"></i>${apt.notes}</div>` : ''}
+                ${apt.visitDate ? `<div class="text-[10px] mt-0.5 ${isToday ? 'text-green-600 font-bold' : 'text-blue-500'}">
+                    <i class="fa-solid fa-calendar${isToday?'-check':''} mr-0.5"></i>${isToday ? 'ביקור היום!' : 'ביקור: ' + formatDate(apt.visitDate)}</div>` : ''}
                 <div class="mt-1 text-xs text-gray-400">
                     <i class="fa-solid fa-car text-red-400 ml-1"></i>~${dist.km} ק"מ (~${dist.mins} דק')
                 </div>
@@ -535,6 +620,7 @@ function openAddModal() {
     document.getElementById('form-apt').reset();
     document.getElementById('f-id').value = '';
     document.getElementById('geocode-status').textContent = '';
+    document.getElementById('f-coords-paste').value = '';
     document.getElementById('modal-apt').classList.remove('hidden');
 }
 
@@ -552,6 +638,7 @@ function openEditModal(id) {
     document.getElementById('f-contact').value   = apt.contact || '';
     document.getElementById('f-lat').value       = apt.coords[0];
     document.getElementById('f-lon').value       = apt.coords[1];
+    document.getElementById('f-coords-paste').value = '';
     document.getElementById('geocode-status').textContent = 'קואורדינטות קיימות';
     document.getElementById('modal-apt').classList.remove('hidden');
 }
@@ -577,6 +664,32 @@ async function geocodeFormAddress() {
             setGeocodeStatus('לא נמצא — הזן קואורדינטות ידנית', '#ef4444');
         }
     } catch { setGeocodeStatus('שגיאה בחיפוש', '#ef4444'); }
+}
+
+// Accepts "32.068, 34.787", "32.068 34.787", or a Google Maps share URL containing @lat,lon
+function parsePastedCoords(raw) {
+    const s = raw.trim();
+    if (!s) return;
+
+    // Google Maps URL: contains @lat,lon,zoom
+    const urlMatch = s.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+    if (urlMatch) {
+        document.getElementById('f-lat').value = urlMatch[1];
+        document.getElementById('f-lon').value = urlMatch[2];
+        setGeocodeStatus('✓ נלקח מקישור Google Maps', '#059669');
+        return;
+    }
+
+    // "lat, lon" or "lat lon" — two numbers separated by comma/space
+    const parts = s.split(/[\s,]+/).map(Number).filter(n => !isNaN(n));
+    if (parts.length >= 2) {
+        // Swap if user accidentally pasted lon,lat (lon for Israel is ~34.x, lat is ~32.x)
+        let [a, b] = parts;
+        if (Math.abs(a) > Math.abs(b)) [a, b] = [b, a]; // smaller = lat for Israel
+        document.getElementById('f-lat').value = a;
+        document.getElementById('f-lon').value = b;
+        setGeocodeStatus('✓ קואורדינטות הודבקו', '#059669');
+    }
 }
 
 function setGeocodeStatus(msg, color) {
@@ -643,7 +756,8 @@ function openNotesModal(id) {
     pendingStatus  = apt.status || 'interested';
 
     document.getElementById('modal-notes-title').textContent = apt.address;
-    document.getElementById('notes-text').value = apt.notes || '';
+    document.getElementById('notes-text').value  = apt.notes     || '';
+    document.getElementById('visit-date').value  = apt.visitDate || '';
     renderStatusButtons(pendingStatus);
     document.getElementById('modal-notes').classList.remove('hidden');
 }
@@ -681,8 +795,9 @@ function saveNotes() {
     const apts = loadApartments();
     const idx  = apts.findIndex(a => a.id === currentNotesId);
     if (idx === -1) return;
-    apts[idx].notes  = document.getElementById('notes-text').value.trim();
-    apts[idx].status = pendingStatus || apts[idx].status;
+    apts[idx].notes     = document.getElementById('notes-text').value.trim();
+    apts[idx].status    = pendingStatus || apts[idx].status;
+    apts[idx].visitDate = document.getElementById('visit-date').value || null;
     saveApartments(apts);
     closeNotesModal();
     buildApp(false);
