@@ -76,18 +76,18 @@
     </div>
 
     <!-- Workplace (desktop only) -->
-    <div class="hidden md:flex p-3 bg-red-50 border-b border-red-100 items-center justify-between flex-shrink-0">
-        <div class="flex items-center gap-2">
+    <button onclick="openWorkplaceModal()" class="hidden md:flex p-3 bg-red-50 border-b border-red-100 items-center justify-between flex-shrink-0 w-full text-right hover:bg-red-100 transition">
+        <div class="flex items-center gap-2 min-w-0">
             <div class="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center text-white flex-shrink-0">
                 <i class="fa-solid fa-briefcase text-sm"></i>
             </div>
-            <div>
+            <div class="min-w-0">
                 <div id="workplace-name" class="text-xs font-bold text-red-900">יעד הגעה: מגדל אלון 1</div>
-                <div id="workplace-address" class="text-[10px] text-red-700">יגאל אלון 94, תל אביב</div>
+                <div id="workplace-address" class="text-[10px] text-red-700 truncate">יגאל אלון 94, תל אביב</div>
             </div>
         </div>
-        <span class="text-[10px] bg-red-200 text-red-800 font-bold px-2 py-0.5 rounded-full flex-shrink-0">עבודה</span>
-    </div>
+        <i class="fa-solid fa-pen text-[10px] text-red-400 flex-shrink-0 mr-1"></i>
+    </button>
 
     <!-- Filters -->
     <div class="p-3 bg-gray-50 border-b border-gray-100 flex-shrink-0 space-y-2">
@@ -355,6 +355,48 @@
   </div>
 </div>
 
+<!-- ── Workplace Modal ────────────────────────────────────────────────────── -->
+<div id="modal-workplace" class="hidden fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4" onclick="if(event.target===this)closeWorkplaceModal()">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm" dir="rtl" onclick="event.stopPropagation()">
+    <div class="bg-red-600 text-white rounded-t-2xl px-5 pt-5 pb-4">
+      <h2 class="font-bold text-base">הגדר מיקום מרכזי</h2>
+      <p class="text-sm text-red-200 mt-1">המרחק מכל דירה יחושב ממיקום זה (מקום עבודה, משפחה וכד')</p>
+    </div>
+    <div class="px-5 py-4 space-y-3">
+      <div>
+        <label class="text-xs font-bold text-gray-600 block mb-1">שם המיקום</label>
+        <input id="wp-name" type="text" placeholder="למשל: עבודה, אוניברסיטה, משפחה..."
+               class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400">
+      </div>
+      <div>
+        <label class="text-xs font-bold text-gray-600 block mb-1">כתובת</label>
+        <div class="flex gap-2">
+          <input id="wp-address" type="text" placeholder="רחוב + עיר"
+                 class="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400">
+          <button onclick="geocodeWorkplace()" class="bg-red-100 text-red-700 px-3 py-2 rounded-lg text-xs font-bold hover:bg-red-200 flex-shrink-0 transition">חפש</button>
+        </div>
+      </div>
+      <div id="wp-geocode-status" class="text-[11px] min-h-[16px]"></div>
+      <div class="flex gap-2">
+        <div class="flex-1">
+          <label class="text-xs text-gray-500 block mb-1">קו רוחב (lat)</label>
+          <input id="wp-lat" type="number" step="any" placeholder="32.068"
+                 class="w-full border rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-red-400">
+        </div>
+        <div class="flex-1">
+          <label class="text-xs text-gray-500 block mb-1">קו אורך (lon)</label>
+          <input id="wp-lon" type="number" step="any" placeholder="34.794"
+                 class="w-full border rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-red-400">
+        </div>
+      </div>
+    </div>
+    <div class="px-5 pb-5 flex gap-2">
+      <button onclick="saveWorkplaceFromModal()" class="flex-1 bg-red-600 text-white py-2 rounded-lg text-sm font-bold hover:bg-red-700 transition">שמור</button>
+      <button onclick="closeWorkplaceModal()" id="wp-cancel-btn" class="px-4 py-2 border rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition">ביטול</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Onboarding Modal ───────────────────────────────────────────────────── -->
 <div id="modal-onboarding" class="hidden fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
   <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm flex flex-col" dir="rtl">
@@ -482,7 +524,6 @@
 <script>
 // ── Constants ─────────────────────────────────────────────────────────────
 const WORKPLACE_KEY = 'apt-workplace-v1';
-const DEFAULT_WORKPLACE = { name: 'מגדל אלון 1', address: 'יגאל אלון 94, תל אביב', coords: [32.06849, 34.79414] };
 const DATA_KEY = 'apt-hunting-v1';
 
 const STATUSES = [
@@ -514,9 +555,9 @@ function saveApartments(data) {
 function loadWorkplace() {
     try {
         const raw = localStorage.getItem(WORKPLACE_KEY);
-        if (raw) return { ...DEFAULT_WORKPLACE, ...JSON.parse(raw) };
+        if (raw) return JSON.parse(raw);
     } catch {}
-    return DEFAULT_WORKPLACE;
+    return null;
 }
 
 function saveWorkplace(wp) {
@@ -528,8 +569,8 @@ function updateWorkplaceDisplay() {
     const wp = loadWorkplace();
     const nameEl = document.getElementById('workplace-name');
     const addrEl = document.getElementById('workplace-address');
-    if (nameEl) nameEl.textContent = `יעד הגעה: ${wp.name}`;
-    if (addrEl) addrEl.textContent = wp.address;
+    if (nameEl) nameEl.textContent = wp ? `יעד הגעה: ${wp.name}` : 'הגדר מיקום מרכזי';
+    if (addrEl) addrEl.textContent = wp ? wp.address : 'לחץ לקביעת נקודת ציון לחישוב מרחקים';
     updateWorkplaceMarker();
 }
 
@@ -554,7 +595,7 @@ function calcDist(c1, c2) {
 }
 
 // ── Map + icons ───────────────────────────────────────────────────────────
-const map = L.map('map').setView(loadWorkplace().coords, 13);
+const map = L.map('map').setView(loadWorkplace()?.coords ?? [32.0853, 34.7818], 13);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
     attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
 }).addTo(map);
@@ -583,8 +624,9 @@ const layerState     = { rail: true, tram: true };
 
 let workplaceMarker = null;
 function updateWorkplaceMarker() {
+    if (workplaceMarker) { workplaceMarker.remove(); workplaceMarker = null; }
     const wp = loadWorkplace();
-    if (workplaceMarker) workplaceMarker.remove();
+    if (!wp) return;
     workplaceMarker = L.marker(wp.coords, { icon: workplaceIcon })
         .bindPopup(`<div style="text-align:right;font-family:Rubik,sans-serif;padding:4px;">
             <strong style="color:#dc2626;">מקום עבודה: ${wp.name}</strong><br>
@@ -774,8 +816,9 @@ function buildApp(fitMap = true) {
         return true;
     }).sort((a, b) => {
         if (currentSort === 'distance') {
-            const wpCoords = loadWorkplace().coords;
-            return calcDist(a.coords, wpCoords).km - calcDist(b.coords, wpCoords).km;
+            const wp = loadWorkplace();
+            if (!wp) return a.price - b.price;
+            return calcDist(a.coords, wp.coords).km - calcDist(b.coords, wp.coords).km;
         }
         if (currentSort === 'entryDate') {
             const rank = v => !v ? 3 : v === 'asap' ? 0 : v === 'flexible' ? 2 : 1;
@@ -796,11 +839,11 @@ function buildApp(fitMap = true) {
         return;
     }
 
-    const wpCoords = loadWorkplace().coords;
-    const bounds = [wpCoords];
+    const wp = loadWorkplace();
+    const bounds = wp ? [wp.coords] : [];
 
     visible.forEach(apt => {
-        const dist     = calcDist(apt.coords, wpCoords);
+        const dist = wp ? calcDist(apt.coords, wp.coords) : null;
         const sc       = STATUSES.find(s => s.value === apt.status) || STATUSES[0];
         const hasNotes = apt.notes && apt.notes.trim().length > 0;
         const isToday  = apt.visitDate === todayStr;
@@ -815,9 +858,9 @@ function buildApp(fitMap = true) {
             </div>
             <div style="font-size:11px;color:#6b7280;margin-bottom:2px;">${apt.details||''}</div>
             <div style="font-size:12px;font-weight:700;color:#4f46e5;margin-bottom:6px;">₪${apt.price.toLocaleString()}</div>
-            <div style="font-size:10px;color:#9ca3af;margin-bottom:4px;">
+            ${dist ? `<div style="font-size:10px;color:#9ca3af;margin-bottom:4px;">
                 <i class="fa-solid fa-car" style="color:#ef4444;margin-left:3px;"></i>~${dist.km} ק"מ (~${dist.mins} דק')
-            </div>
+            </div>` : ''}
             ${apt.entryDate ? `<div style="font-size:10px;color:#0369a1;margin-bottom:4px;"><i class="fa-solid fa-key" style="margin-left:3px;"></i>כניסה: ${formatEntryDate(apt.entryDate)}</div>` : ''}
             <div style="border-top:1px solid #f3f4f6;padding-top:6px;display:flex;gap:6px;">
                 <button onclick="openNotesModal(${apt.id})"
@@ -859,9 +902,9 @@ function buildApp(fitMap = true) {
                 ${apt.entryDate ? `<div class="text-[10px] text-sky-600 mt-0.5"><i class="fa-solid fa-key mr-0.5"></i>כניסה: ${formatEntryDate(apt.entryDate)}</div>` : ''}
                 ${apt.visitDate ? `<div class="text-[10px] mt-0.5 ${isToday ? 'text-green-600 font-bold' : 'text-blue-500'}">
                     <i class="fa-solid fa-calendar${isToday?'-check':''} mr-0.5"></i>${isToday ? 'ביקור היום!' : 'ביקור: ' + formatDate(apt.visitDate)}</div>` : ''}
-                <div class="mt-1 text-xs text-gray-400">
+                ${dist ? `<div class="mt-1 text-xs text-gray-400">
                     <i class="fa-solid fa-car text-red-400 ml-1"></i>~${dist.km} ק"מ (~${dist.mins} דק')
-                </div>
+                </div>` : ''}
             </div>
             <div class="flex flex-col items-end gap-1.5 flex-shrink-0">
                 <span class="text-sm font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-lg">₪${apt.price.toLocaleString()}</span>
@@ -1285,6 +1328,62 @@ function resetToDefaults() {
     buildApp();
 }
 
+// ── Workplace modal ───────────────────────────────────────────────────────
+function openWorkplaceModal() {
+    const wp = loadWorkplace();
+    document.getElementById('wp-name').value    = wp?.name    || '';
+    document.getElementById('wp-address').value = wp?.address || '';
+    document.getElementById('wp-lat').value     = wp?.coords?.[0] ?? '';
+    document.getElementById('wp-lon').value     = wp?.coords?.[1] ?? '';
+    document.getElementById('wp-geocode-status').textContent = '';
+    // hide cancel button if workplace has never been set (user must configure)
+    document.getElementById('wp-cancel-btn').classList.toggle('hidden', !wp);
+    document.getElementById('modal-workplace').classList.remove('hidden');
+}
+
+function closeWorkplaceModal() {
+    document.getElementById('modal-workplace').classList.add('hidden');
+}
+
+function setWpGeocodeStatus(msg, color) {
+    const el = document.getElementById('wp-geocode-status');
+    el.textContent = msg;
+    el.style.color = color;
+}
+
+async function geocodeWorkplace() {
+    const address = document.getElementById('wp-address').value.trim();
+    if (!address) { setWpGeocodeStatus('הזן כתובת קודם', '#ef4444'); return; }
+    setWpGeocodeStatus('מחפש...', '#6b7280');
+    try {
+        const q = encodeURIComponent(`${address}, ישראל`);
+        const data = await fetch(
+            `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1&countrycodes=il`,
+            { headers: { 'User-Agent': 'apartment-hunter-poc/1.0' } }
+        ).then(r => r.json());
+        if (data.length) {
+            document.getElementById('wp-lat').value = parseFloat(data[0].lat).toFixed(6);
+            document.getElementById('wp-lon').value = parseFloat(data[0].lon).toFixed(6);
+            setWpGeocodeStatus(`✓ ${data[0].display_name.slice(0, 55)}`, '#059669');
+        } else {
+            setWpGeocodeStatus('לא נמצא — הזן קואורדינטות ידנית', '#ef4444');
+        }
+    } catch { setWpGeocodeStatus('שגיאה בחיפוש', '#ef4444'); }
+}
+
+function saveWorkplaceFromModal() {
+    const name    = document.getElementById('wp-name').value.trim();
+    const address = document.getElementById('wp-address').value.trim();
+    const lat     = parseFloat(document.getElementById('wp-lat').value);
+    const lon     = parseFloat(document.getElementById('wp-lon').value);
+    if (!name)              { setWpGeocodeStatus('נדרש שם למיקום', '#ef4444'); return; }
+    if (isNaN(lat) || isNaN(lon)) { setWpGeocodeStatus('נדרשות קואורדינטות — לחץ "חפש" או הזן ידנית', '#ef4444'); return; }
+    saveWorkplace({ name, address, coords: [lat, lon] });
+    closeWorkplaceModal();
+    map.setView([lat, lon], 13);
+    buildApp(false);
+}
+
 // ── Onboarding ────────────────────────────────────────────────────────────
 const ONBOARDING_KEY = 'apt-onboarding-v1';
 let obStep = 1;
@@ -1299,6 +1398,7 @@ function showOnboarding() {
 function dismissOnboarding() {
     localStorage.setItem(ONBOARDING_KEY, '1');
     document.getElementById('modal-onboarding').classList.add('hidden');
+    if (!loadWorkplace()) openWorkplaceModal();
 }
 
 function obNavigate(dir) {
@@ -1564,6 +1664,8 @@ function closeSyncModal() { document.getElementById('modal-sync').classList.add(
     buildApp();
     loadTransitStations();
     showOnboarding();
+    // For users who already dismissed onboarding, prompt for workplace if not set
+    if (localStorage.getItem(ONBOARDING_KEY) && !loadWorkplace()) openWorkplaceModal();
 
     // Re-pull on tab focus (other device may have written)
     document.addEventListener('visibilitychange', () => {
