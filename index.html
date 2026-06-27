@@ -134,112 +134,126 @@
 </div>
 
 <!-- ── Add / Edit Apartment Modal ─────────────────────────────────────────── -->
-<div id="modal-apt" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+<!-- ── Unified Edit / Notes Modal ─────────────────────────────────────────── -->
+<div id="modal-main" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
   <div class="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col" dir="rtl">
-    <div class="p-4 bg-indigo-900 text-white rounded-t-xl flex items-center justify-between flex-shrink-0">
-      <h2 id="modal-apt-title" class="font-bold">הוספת דירה חדשה</h2>
-      <button onclick="closeAptModal()" class="text-indigo-200 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+    <!-- Header -->
+    <div class="bg-indigo-900 text-white rounded-t-xl flex-shrink-0">
+      <div class="flex items-center justify-between px-4 pt-3 pb-2">
+        <h2 id="modal-main-title" class="font-bold text-sm truncate max-w-[240px]"></h2>
+        <button onclick="closeMainModal()" class="text-indigo-200 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      <!-- Tab bar (hidden in add mode) -->
+      <div id="modal-tabs" class="flex">
+        <button id="tab-edit-btn" onclick="switchTab('edit')" type="button"
+                class="flex-1 py-2 text-sm font-medium border-b-2 transition"
+                style="border-bottom-color:white;color:white;">
+          <i class="fa-solid fa-pen ml-1" style="font-size:10px;"></i>עריכה
+        </button>
+        <button id="tab-notes-btn" onclick="switchTab('notes')" type="button"
+                class="flex-1 py-2 text-sm font-medium border-b-2 transition"
+                style="border-bottom-color:transparent;color:#a5b4fc;">
+          <i class="fa-solid fa-note-sticky ml-1" style="font-size:10px;"></i>הערות
+        </button>
+      </div>
     </div>
-    <form id="form-apt" onsubmit="submitAptForm(event)" class="p-4 space-y-2.5 overflow-y-auto flex-1">
-      <input id="f-id" type="hidden">
 
-      <input id="f-address" type="text" placeholder="כתובת (רחוב ומספר) *" required
-             class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+    <!-- Edit tab -->
+    <div id="tab-edit" class="overflow-y-auto flex-1">
+      <form id="form-apt" onsubmit="submitAptForm(event)" class="p-4 space-y-2.5">
+        <input id="f-id" type="hidden">
 
-      <div class="grid grid-cols-2 gap-2">
-        <input id="f-city" type="text" placeholder="עיר *" required
-               class="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
-        <input id="f-neighborhood" type="text" placeholder="שכונה"
-               class="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
-      </div>
-
-      <div class="grid grid-cols-2 gap-2">
-        <input id="f-price" type="number" placeholder="מחיר ₪ *" required min="0"
-               class="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
-        <input id="f-details" type="text" placeholder="פרטים (חדרים, קומה...)"
-               class="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
-      </div>
-
-      <div>
-        <input id="f-entry-date-text" type="text" dir="ltr" placeholder="תאריך כניסה: 1.8 · 1.8.26 · ..."
-               oninput="onAptDateInput('f-entry-date-text','f-entry-date','f-entry-date-preview',this.value)"
+        <input id="f-address" type="text" placeholder="כתובת (רחוב ומספר) *" required
                class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
-        <input type="hidden" id="f-entry-date">
-        <div id="f-entry-date-preview" class="text-[11px] mt-1 min-h-[1rem]"></div>
-      </div>
 
-      <input id="f-link" type="url" placeholder="קישור Yad2"
-             class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
-
-      <input id="f-contact" type="text" placeholder="איש קשר / טלפון"
-             class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
-
-      <!-- Geocoding -->
-      <div class="border border-dashed border-gray-200 rounded-lg p-3 space-y-2">
-        <div class="flex items-center gap-2">
-          <button type="button" onclick="geocodeFormAddress()"
-                  class="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition whitespace-nowrap">
-            <i class="fa-solid fa-location-dot ml-1"></i>חפש מיקום
-          </button>
-          <span id="geocode-status" class="text-[11px] text-gray-500 min-w-0 break-words"></span>
-        </div>
-        <!-- Paste Google Maps coords or "lat, lon" string -->
-        <input id="f-coords-paste" type="text" placeholder='הדבק מ-Google Maps: "32.0680, 34.7874"' dir="ltr"
-               oninput="parsePastedCoords(this.value)"
-               class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
         <div class="grid grid-cols-2 gap-2">
-          <input id="f-lat" type="number" step="any" placeholder="Latitude (32.xxx)" dir="ltr"
+          <input id="f-city" type="text" placeholder="עיר *" required
                  class="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
-          <input id="f-lon" type="number" step="any" placeholder="Longitude (34.xxx)" dir="ltr"
+          <input id="f-neighborhood" type="text" placeholder="שכונה"
                  class="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
         </div>
-      </div>
 
-      <div class="flex gap-2 pt-1">
-        <button type="submit"
-                class="flex-1 bg-indigo-600 text-white py-2 rounded-lg font-medium hover:bg-indigo-700 transition text-sm">
-          שמור
-        </button>
-        <button type="button" onclick="closeAptModal()"
-                class="px-4 bg-gray-100 text-gray-700 py-2 rounded-lg font-medium hover:bg-gray-200 transition text-sm">
-          ביטול
-        </button>
-      </div>
-    </form>
-  </div>
-</div>
+        <div class="grid grid-cols-2 gap-2">
+          <input id="f-price" type="number" placeholder="מחיר ₪ *" required min="0"
+                 class="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+          <input id="f-details" type="text" placeholder="פרטים (חדרים, קומה...)"
+                 class="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+        </div>
 
-<!-- ── Notes / Status Modal ───────────────────────────────────────────────── -->
-<div id="modal-notes" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-  <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm" dir="rtl">
-    <div class="p-4 bg-indigo-900 text-white rounded-t-xl flex items-center justify-between">
-      <h2 id="modal-notes-title" class="font-bold text-sm truncate max-w-[240px]">הערות</h2>
-      <button onclick="closeNotesModal()" class="text-indigo-200 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
-    </div>
-    <div class="p-4 space-y-4">
-      <div>
-        <div class="text-xs font-bold text-gray-500 mb-2">סטטוס</div>
-        <div class="grid grid-cols-4 gap-1.5" id="status-buttons"></div>
-      </div>
-      <div>
-        <div class="text-xs font-bold text-gray-500 mb-1.5">תאריך ביקור</div>
-        <input type="text" id="visit-date-text" dir="ltr"
-               placeholder="5.6  ·  5.6.26  ·  היום  ·  מחר"
-               oninput="onVisitDateInput(this.value)"
+        <div>
+          <input id="f-entry-date-text" type="text" dir="ltr" placeholder="תאריך כניסה: 1.8 · 1.8.26 · ..."
+                 oninput="onAptDateInput('f-entry-date-text','f-entry-date','f-entry-date-preview',this.value)"
+                 class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+          <input type="hidden" id="f-entry-date">
+          <div id="f-entry-date-preview" class="text-[11px] mt-1 min-h-[1rem]"></div>
+        </div>
+
+        <input id="f-link" type="url" placeholder="קישור Yad2"
                class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
-        <input type="hidden" id="visit-date">
-        <div id="visit-date-preview" class="text-[11px] mt-1 min-h-[1rem]"></div>
-      </div>
-      <div>
-        <div class="text-xs font-bold text-gray-500 mb-1.5">הערות</div>
-        <textarea id="notes-text" rows="3" placeholder="הערות, רשמים, שאלות..."
-                  class="w-full border rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400"></textarea>
-      </div>
-      <div class="flex gap-2">
-        <button onclick="saveNotes()"
-                class="flex-1 bg-indigo-600 text-white py-2 rounded-lg font-medium hover:bg-indigo-700 transition text-sm">שמור</button>
-        <button onclick="closeNotesModal()"
-                class="px-4 bg-gray-100 text-gray-700 py-2 rounded-lg font-medium hover:bg-gray-200 transition text-sm">סגור</button>
+
+        <input id="f-contact" type="text" placeholder="איש קשר / טלפון"
+               class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+
+        <!-- Geocoding -->
+        <div class="border border-dashed border-gray-200 rounded-lg p-3 space-y-2">
+          <div class="flex items-center gap-2">
+            <button type="button" onclick="geocodeFormAddress()"
+                    class="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition whitespace-nowrap">
+              <i class="fa-solid fa-location-dot ml-1"></i>חפש מיקום
+            </button>
+            <span id="geocode-status" class="text-[11px] text-gray-500 min-w-0 break-words"></span>
+          </div>
+          <input id="f-coords-paste" type="text" placeholder='הדבק מ-Google Maps: "32.0680, 34.7874"' dir="ltr"
+                 oninput="parsePastedCoords(this.value)"
+                 class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+          <div class="grid grid-cols-2 gap-2">
+            <input id="f-lat" type="number" step="any" placeholder="Latitude (32.xxx)" dir="ltr"
+                   class="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+            <input id="f-lon" type="number" step="any" placeholder="Longitude (34.xxx)" dir="ltr"
+                   class="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+          </div>
+        </div>
+
+        <div class="flex gap-2 pt-1">
+          <button type="submit"
+                  class="flex-1 bg-indigo-600 text-white py-2 rounded-lg font-medium hover:bg-indigo-700 transition text-sm">
+            שמור
+          </button>
+          <button type="button" onclick="closeMainModal()"
+                  class="px-4 bg-gray-100 text-gray-700 py-2 rounded-lg font-medium hover:bg-gray-200 transition text-sm">
+            ביטול
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Notes tab -->
+    <div id="tab-notes" class="hidden overflow-y-auto flex-1">
+      <div class="p-4 space-y-4">
+        <div>
+          <div class="text-xs font-bold text-gray-500 mb-2">סטטוס</div>
+          <div class="grid grid-cols-4 gap-1.5" id="status-buttons"></div>
+        </div>
+        <div>
+          <div class="text-xs font-bold text-gray-500 mb-1.5">תאריך ביקור</div>
+          <input type="text" id="visit-date-text" dir="ltr"
+                 placeholder="5.6  ·  5.6.26  ·  היום  ·  מחר"
+                 oninput="onVisitDateInput(this.value)"
+                 class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
+          <input type="hidden" id="visit-date">
+          <div id="visit-date-preview" class="text-[11px] mt-1 min-h-[1rem]"></div>
+        </div>
+        <div>
+          <div class="text-xs font-bold text-gray-500 mb-1.5">הערות</div>
+          <textarea id="notes-text" rows="4" placeholder="הערות, רשמים, שאלות..."
+                    class="w-full border rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400"></textarea>
+        </div>
+        <div class="flex gap-2">
+          <button onclick="saveNotes()"
+                  class="flex-1 bg-indigo-600 text-white py-2 rounded-lg font-medium hover:bg-indigo-700 transition text-sm">שמור</button>
+          <button type="button" onclick="closeMainModal()"
+                  class="px-4 bg-gray-100 text-gray-700 py-2 rounded-lg font-medium hover:bg-gray-200 transition text-sm">סגור</button>
+        </div>
       </div>
     </div>
   </div>
@@ -697,39 +711,84 @@ async function loadTransitStations() {
 }
 
 // ── Add / Edit modal ──────────────────────────────────────────────────────
+let currentEditId = null;
+
+function switchTab(tab) {
+    const isEdit = tab === 'edit';
+    document.getElementById('tab-edit').classList.toggle('hidden', !isEdit);
+    document.getElementById('tab-notes').classList.toggle('hidden', isEdit);
+    Object.assign(document.getElementById('tab-edit-btn').style,
+        isEdit  ? { borderBottomColor: 'white', color: 'white' }
+                : { borderBottomColor: 'transparent', color: '#a5b4fc' });
+    Object.assign(document.getElementById('tab-notes-btn').style,
+        !isEdit ? { borderBottomColor: 'white', color: 'white' }
+                : { borderBottomColor: 'transparent', color: '#a5b4fc' });
+    if (!isEdit && currentEditId !== null) {
+        const apt = loadApartments().find(a => a.id === currentEditId);
+        if (apt) _populateNotesTab(apt);
+    }
+}
+
+function _populateEditForm(apt) {
+    document.getElementById('f-id').value            = apt.id;
+    document.getElementById('f-address').value       = apt.address;
+    document.getElementById('f-city').value          = apt.city;
+    document.getElementById('f-neighborhood').value  = apt.neighborhood || '';
+    document.getElementById('f-price').value         = apt.price;
+    document.getElementById('f-details').value       = apt.details || '';
+    document.getElementById('f-link').value          = apt.link || '';
+    document.getElementById('f-contact').value       = apt.contact || '';
+    document.getElementById('f-lat').value           = apt.coords[0];
+    document.getElementById('f-lon').value           = apt.coords[1];
+    document.getElementById('f-coords-paste').value  = '';
+    document.getElementById('geocode-status').textContent = 'קואורדינטות קיימות';
+    const entryTextVal = apt.entryDate ? formatDate(apt.entryDate) : '';
+    document.getElementById('f-entry-date-text').value = entryTextVal;
+    onAptDateInput('f-entry-date-text', 'f-entry-date', 'f-entry-date-preview', entryTextVal);
+}
+
+function _populateNotesTab(apt) {
+    pendingStatus = apt.status || 'interested';
+    document.getElementById('notes-text').value = apt.notes || '';
+    const textVal = apt.visitDate ? formatDate(apt.visitDate) : '';
+    document.getElementById('visit-date-text').value = textVal;
+    onVisitDateInput(textVal);
+    renderStatusButtons(pendingStatus);
+}
+
 function openAddModal() {
-    document.getElementById('modal-apt-title').textContent = 'הוספת דירה חדשה';
+    currentEditId = null;
+    document.getElementById('modal-main-title').textContent = 'הוספת דירה חדשה';
+    document.getElementById('modal-tabs').style.display = 'none';
     document.getElementById('form-apt').reset();
     document.getElementById('f-id').value = '';
     document.getElementById('geocode-status').textContent = '';
     document.getElementById('f-coords-paste').value = '';
     document.getElementById('f-entry-date-preview').textContent = '';
-    document.getElementById('modal-apt').classList.remove('hidden');
+    document.getElementById('tab-edit').classList.remove('hidden');
+    document.getElementById('tab-notes').classList.add('hidden');
+    document.getElementById('modal-main').classList.remove('hidden');
 }
 
 function openEditModal(id) {
     const apt = loadApartments().find(a => a.id === id);
     if (!apt) return;
-    document.getElementById('modal-apt-title').textContent = 'עריכת דירה';
-    document.getElementById('f-id').value        = id;
-    document.getElementById('f-address').value   = apt.address;
-    document.getElementById('f-city').value      = apt.city;
-    document.getElementById('f-neighborhood').value = apt.neighborhood || '';
-    document.getElementById('f-price').value     = apt.price;
-    document.getElementById('f-details').value   = apt.details || '';
-    document.getElementById('f-link').value      = apt.link || '';
-    document.getElementById('f-contact').value   = apt.contact || '';
-    document.getElementById('f-lat').value       = apt.coords[0];
-    document.getElementById('f-lon').value       = apt.coords[1];
-    document.getElementById('f-coords-paste').value = '';
-    document.getElementById('geocode-status').textContent = 'קואורדינטות קיימות';
-    const entryTextVal = apt.entryDate ? formatDate(apt.entryDate) : '';
-    document.getElementById('f-entry-date-text').value = entryTextVal;
-    onAptDateInput('f-entry-date-text', 'f-entry-date', 'f-entry-date-preview', entryTextVal);
-    document.getElementById('modal-apt').classList.remove('hidden');
+    currentEditId = id;
+    document.getElementById('modal-main-title').textContent = apt.address;
+    document.getElementById('modal-tabs').style.display = '';
+    _populateEditForm(apt);
+    switchTab('edit');
+    document.getElementById('modal-main').classList.remove('hidden');
 }
 
-function closeAptModal() { document.getElementById('modal-apt').classList.add('hidden'); }
+function closeMainModal() {
+    document.getElementById('modal-main').classList.add('hidden');
+    currentEditId = null;
+    pendingStatus = null;
+}
+// keep old names as aliases so any stray references still work
+const closeAptModal   = closeMainModal;
+const closeNotesModal = closeMainModal;
 
 async function geocodeFormAddress() {
     const address = document.getElementById('f-address').value.trim();
@@ -820,7 +879,7 @@ function submitAptForm(e) {
         apts.push(apt);
     }
     saveApartments(apts);
-    closeAptModal();
+    closeMainModal();
     buildApp();
 }
 
@@ -866,24 +925,18 @@ function onVisitDateInput(val) {
 }
 
 // ── Notes / Status modal ──────────────────────────────────────────────────
-let currentNotesId = null;
-let pendingStatus  = null;
+let pendingStatus = null;
 
 function openNotesModal(id) {
     const apt = loadApartments().find(a => a.id === id);
     if (!apt) return;
-    currentNotesId = id;
-    pendingStatus  = apt.status || 'interested';
-
-    document.getElementById('modal-notes-title').textContent = apt.address;
-    document.getElementById('notes-text').value  = apt.notes || '';
-    // Populate date text field from stored ISO date (DD.MM.YYYY so the parser re-confirms it)
-    const stored = apt.visitDate || '';
-    const textVal = stored ? formatDate(stored) : '';
-    document.getElementById('visit-date-text').value = textVal;
-    onVisitDateInput(textVal); // sets hidden input + preview
-    renderStatusButtons(pendingStatus);
-    document.getElementById('modal-notes').classList.remove('hidden');
+    currentEditId = id;
+    document.getElementById('modal-main-title').textContent = apt.address;
+    document.getElementById('modal-tabs').style.display = '';
+    _populateEditForm(apt);
+    _populateNotesTab(apt);
+    switchTab('notes');
+    document.getElementById('modal-main').classList.remove('hidden');
 }
 
 function renderStatusButtons(active) {
@@ -909,21 +962,15 @@ function renderStatusButtons(active) {
     });
 }
 
-function closeNotesModal() {
-    document.getElementById('modal-notes').classList.add('hidden');
-    currentNotesId = null;
-    pendingStatus  = null;
-}
-
 function saveNotes() {
     const apts = loadApartments();
-    const idx  = apts.findIndex(a => a.id === currentNotesId);
+    const idx  = apts.findIndex(a => a.id === currentEditId);
     if (idx === -1) return;
     apts[idx].notes     = document.getElementById('notes-text').value.trim();
     apts[idx].status    = pendingStatus || apts[idx].status;
     apts[idx].visitDate = document.getElementById('visit-date').value || null;
     saveApartments(apts);
-    closeNotesModal();
+    closeMainModal();
     buildApp(false);
 }
 
