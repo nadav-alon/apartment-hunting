@@ -186,8 +186,8 @@
         </div>
 
         <div>
-          <input id="f-entry-date-text" type="text" dir="ltr" placeholder="תאריך כניסה: 1.8 · 1.8.26 · ..."
-                 oninput="onAptDateInput('f-entry-date-text','f-entry-date','f-entry-date-preview',this.value)"
+          <input id="f-entry-date-text" type="text" dir="ltr" placeholder="1.8 · בהקדם · גמיש"
+                 oninput="onEntryDateInput(this.value)"
                  class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
           <input type="hidden" id="f-entry-date">
           <div id="f-entry-date-preview" class="text-[11px] mt-1 min-h-[1rem]"></div>
@@ -417,6 +417,27 @@ let visitingTodayOnly  = false;
 function today() { return new Date().toISOString().slice(0, 10); }
 function formatDate(d) { if (!d) return ''; const [y,m,dd]=d.split('-'); return `${dd}.${m}.${y}`; }
 
+const ENTRY_SPECIAL = { 'בהקדם':'asap', 'asap':'asap', 'גמיש':'flexible', 'גמישות':'flexible', 'flexible':'flexible' };
+function formatEntryDate(v) {
+    if (!v) return '';
+    if (v === 'asap') return 'בהקדם';
+    if (v === 'flexible') return 'גמיש';
+    return formatDate(v);
+}
+
+function onEntryDateInput(val) {
+    const special = ENTRY_SPECIAL[val.trim().toLowerCase()];
+    const hidden  = document.getElementById('f-entry-date');
+    const preview = document.getElementById('f-entry-date-preview');
+    if (special) {
+        hidden.value = special;
+        preview.textContent = '✓ ' + formatEntryDate(special);
+        preview.style.color = '#059669';
+        return;
+    }
+    onAptDateInput('f-entry-date-text', 'f-entry-date', 'f-entry-date-preview', val);
+}
+
 let currentSort = 'price'; // 'price' | 'distance' | 'entryDate'
 
 function setSort(field) {
@@ -569,10 +590,11 @@ function buildApp(fitMap = true) {
             return calcDist(a.coords, WORKPLACE_COORDS).km - calcDist(b.coords, WORKPLACE_COORDS).km;
         }
         if (currentSort === 'entryDate') {
-            if (!a.entryDate && !b.entryDate) return 0;
-            if (!a.entryDate) return 1;
-            if (!b.entryDate) return -1;
-            return a.entryDate.localeCompare(b.entryDate);
+            const rank = v => !v ? 3 : v === 'asap' ? 0 : v === 'flexible' ? 2 : 1;
+            const ra = rank(a.entryDate), rb = rank(b.entryDate);
+            if (ra !== rb) return ra - rb;
+            if (ra === 1) return a.entryDate.localeCompare(b.entryDate);
+            return 0;
         }
         return a.price - b.price;
     });
@@ -607,7 +629,7 @@ function buildApp(fitMap = true) {
             <div style="font-size:10px;color:#9ca3af;margin-bottom:4px;">
                 <i class="fa-solid fa-car" style="color:#ef4444;margin-left:3px;"></i>~${dist.km} ק"מ (~${dist.mins} דק')
             </div>
-            ${apt.entryDate ? `<div style="font-size:10px;color:#0369a1;margin-bottom:4px;"><i class="fa-solid fa-key" style="margin-left:3px;"></i>כניסה: ${formatDate(apt.entryDate)}</div>` : ''}
+            ${apt.entryDate ? `<div style="font-size:10px;color:#0369a1;margin-bottom:4px;"><i class="fa-solid fa-key" style="margin-left:3px;"></i>כניסה: ${formatEntryDate(apt.entryDate)}</div>` : ''}
             <div style="border-top:1px solid #f3f4f6;padding-top:6px;display:flex;gap:6px;">
                 <button onclick="openNotesModal(${apt.id})"
                         style="flex:1;font-size:11px;padding:4px 6px;border-radius:6px;border:1px solid #e5e7eb;background:#fffbeb;cursor:pointer;font-family:Rubik,sans-serif;color:#92400e;">
@@ -642,7 +664,7 @@ function buildApp(fitMap = true) {
                 <div class="font-bold text-sm text-gray-900 truncate group-hover:text-indigo-900">${apt.address}</div>
                 <div class="text-xs text-gray-500 truncate">${apt.details || ''}</div>
                 ${hasNotes ? `<div class="text-[10px] text-amber-600 mt-0.5 truncate"><i class="fa-solid fa-note-sticky mr-0.5"></i>${apt.notes}</div>` : ''}
-                ${apt.entryDate ? `<div class="text-[10px] text-sky-600 mt-0.5"><i class="fa-solid fa-key mr-0.5"></i>כניסה: ${formatDate(apt.entryDate)}</div>` : ''}
+                ${apt.entryDate ? `<div class="text-[10px] text-sky-600 mt-0.5"><i class="fa-solid fa-key mr-0.5"></i>כניסה: ${formatEntryDate(apt.entryDate)}</div>` : ''}
                 ${apt.visitDate ? `<div class="text-[10px] mt-0.5 ${isToday ? 'text-green-600 font-bold' : 'text-blue-500'}">
                     <i class="fa-solid fa-calendar${isToday?'-check':''} mr-0.5"></i>${isToday ? 'ביקור היום!' : 'ביקור: ' + formatDate(apt.visitDate)}</div>` : ''}
                 <div class="mt-1 text-xs text-gray-400">
@@ -753,9 +775,9 @@ function _populateEditForm(apt) {
     document.getElementById('f-lon').value           = apt.coords[1];
     document.getElementById('f-coords-paste').value  = '';
     document.getElementById('geocode-status').textContent = 'קואורדינטות קיימות';
-    const entryTextVal = apt.entryDate ? formatDate(apt.entryDate) : '';
+    const entryTextVal = apt.entryDate ? formatEntryDate(apt.entryDate) : '';
     document.getElementById('f-entry-date-text').value = entryTextVal;
-    onAptDateInput('f-entry-date-text', 'f-entry-date', 'f-entry-date-preview', entryTextVal);
+    onEntryDateInput(entryTextVal);
 }
 
 function _populateNotesTab(apt) {
