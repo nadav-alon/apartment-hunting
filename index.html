@@ -237,7 +237,7 @@
       <div class="p-4 space-y-4">
         <div>
           <div class="text-xs font-bold text-gray-500 mb-2">סטטוס</div>
-          <div class="grid grid-cols-4 gap-1.5" id="status-buttons"></div>
+          <div class="grid grid-cols-2 gap-1.5" id="status-buttons"></div>
         </div>
         <div>
           <div class="text-xs font-bold text-gray-500 mb-1.5">תאריך ביקור</div>
@@ -303,12 +303,16 @@ const WORKPLACE_COORDS = [32.06849, 34.79414];
 const DATA_KEY = 'apt-hunting-v1';
 
 const STATUSES = [
-    { value: 'interested',     label: 'מעוניין',  icon: 'fa-heart',  bg: '#4f46e5' },
-    { value: 'favorite',       label: 'מועדף',    icon: 'fa-star',   bg: '#d97706' },
-    { value: 'visited',        label: 'ביקרתי',   icon: 'fa-check',  bg: '#059669' },
-    { value: 'not-interested', label: 'לא מתאים', icon: 'fa-xmark',  bg: '#6b7280' },
+    { value: 'interested',     label: 'מעוניין',    icon: 'fa-heart',          bg: '#4f46e5' },
+    { value: 'favorite',       label: 'מועדף',      icon: 'fa-star',           bg: '#d97706' },
+    { value: 'contacted',      label: 'פניתי',      icon: 'fa-paper-plane',    bg: '#0284c7' },
+    { value: 'scheduled',      label: 'נקבע ביקור', icon: 'fa-calendar-check', bg: '#7c3aed' },
+    { value: 'visited',        label: 'ביקרתי',     icon: 'fa-check',          bg: '#059669' },
+    { value: 'not-interested', label: 'לא מתאים',   icon: 'fa-xmark',          bg: '#6b7280' },
 ];
-const STATUS_COLOR = { interested: '#4f46e5', favorite: '#d97706', visited: '#059669', 'not-interested': '#9ca3af' };
+// funnel order for auto-advance (statuses before 'scheduled' get bumped when a visit date is set)
+const BEFORE_SCHEDULED = new Set(['interested', 'favorite', 'contacted']);
+const STATUS_COLOR = { interested: '#4f46e5', favorite: '#d97706', contacted: '#0284c7', scheduled: '#7c3aed', visited: '#059669', 'not-interested': '#6b7280' };
 
 const DEFAULT_APARTMENTS = [
     { id:1,  address:'הורדים 11, גבעתיים',               neighborhood:'שכונת הל"ה',              city:'גבעתיים',    price:5500, details:'דירת מגורים',       coords:[32.0737,34.8020], link:'https://www.yad2.co.il/realestate/item/mrpneapg', contact:'מודעה פעילה' },
@@ -1001,9 +1005,12 @@ function saveNotes() {
     const apts = loadApartments();
     const idx  = apts.findIndex(a => a.id === currentEditId);
     if (idx === -1) return;
+    const visitDate = document.getElementById('visit-date').value || null;
+    let status = pendingStatus || apts[idx].status;
+    if (visitDate && BEFORE_SCHEDULED.has(status)) status = 'scheduled';
     apts[idx].notes     = document.getElementById('notes-text').value.trim();
-    apts[idx].status    = pendingStatus || apts[idx].status;
-    apts[idx].visitDate = document.getElementById('visit-date').value || null;
+    apts[idx].status    = status;
+    apts[idx].visitDate = visitDate;
     saveApartments(apts);
     closeMainModal();
     buildApp(false);
