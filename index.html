@@ -135,7 +135,7 @@
 
 <!-- ── Add / Edit Apartment Modal ─────────────────────────────────────────── -->
 <!-- ── Unified Edit / Notes Modal ─────────────────────────────────────────── -->
-<div id="modal-main" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+<div id="modal-main" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onclick="if(event.target===this)closeMainModal()">
   <div class="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col" dir="rtl">
     <!-- Header -->
     <div class="bg-indigo-900 text-white rounded-t-xl flex-shrink-0">
@@ -260,7 +260,7 @@
 </div>
 
 <!-- ── Import Modal ───────────────────────────────────────────────────────── -->
-<div id="modal-import" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+<div id="modal-import" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onclick="if(event.target===this)closeImportModal()">
   <div class="bg-white rounded-xl shadow-2xl w-full max-w-md" dir="rtl">
     <div class="p-4 bg-indigo-900 text-white rounded-t-xl flex items-center justify-between">
       <h2 class="font-bold">ייבוא רשימת דירות</h2>
