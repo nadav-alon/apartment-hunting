@@ -1439,9 +1439,9 @@ async function syncFromGist() {
     const merged = mergeApartments(local, remoteApts);
     localStorage.setItem(DATA_KEY, JSON.stringify(merged));
     if (remoteWp) localStorage.setItem(WORKPLACE_KEY, JSON.stringify(remoteWp));
-    // If local had newer/extra entries, push the merged result back up
+    // Push back if local had newer entries, or if remote was v1 (needs format upgrade)
     const remoteKeys = new Set(remoteApts.map(a => `${a.id}:${a.updatedAt||0}`));
-    if (merged.some(a => !remoteKeys.has(`${a.id}:${a.updatedAt||0}`))) gistPushAll();
+    if (!remoteWp || merged.some(a => !remoteKeys.has(`${a.id}:${a.updatedAt||0}`))) gistPushAll();
     buildApp(false);
 }
 
@@ -1557,6 +1557,7 @@ function closeSyncModal() { document.getElementById('modal-sync').classList.add(
     if (remote) {
         localStorage.setItem(DATA_KEY, JSON.stringify(remote.apartments));
         if (remote.workplace) localStorage.setItem(WORKPLACE_KEY, JSON.stringify(remote.workplace));
+        else gistPushAll(); // upgrade Gist from v1 (array) to v2 format
     }
     if (!getSyncConfig()) syncDot('off');
 
