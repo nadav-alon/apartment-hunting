@@ -347,10 +347,93 @@
         <button onclick="doImport()"
                 class="flex-1 bg-indigo-600 text-white py-2 rounded-lg font-medium hover:bg-indigo-700 transition text-sm">ייבא</button>
         <button onclick="resetToDefaults()"
-                class="px-3 bg-orange-100 text-orange-700 py-2 rounded-lg font-medium hover:bg-orange-200 transition text-sm">אפס לברירת מחדל</button>
+                class="px-3 bg-red-100 text-red-700 py-2 rounded-lg font-medium hover:bg-red-200 transition text-sm">מחק הכל</button>
         <button onclick="closeImportModal()"
                 class="px-3 bg-gray-100 text-gray-700 py-2 rounded-lg font-medium hover:bg-gray-200 transition text-sm">ביטול</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Onboarding Modal ───────────────────────────────────────────────────── -->
+<div id="modal-onboarding" class="hidden fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm flex flex-col" dir="rtl">
+    <!-- Header -->
+    <div class="bg-indigo-900 text-white rounded-t-2xl px-5 pt-5 pb-4 flex-shrink-0">
+      <div class="flex items-start justify-between gap-2">
+        <h2 class="font-bold text-base leading-snug">ברוך הבא למפת הדירות</h2>
+        <button onclick="dismissOnboarding()" class="text-indigo-300 hover:text-white mt-0.5 flex-shrink-0">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+      <!-- Step dots -->
+      <div class="flex gap-1.5 mt-3">
+        <div class="ob-dot w-2 h-2 rounded-full bg-white transition-opacity"></div>
+        <div class="ob-dot w-2 h-2 rounded-full bg-white transition-opacity" style="opacity:.35;"></div>
+        <div class="ob-dot w-2 h-2 rounded-full bg-white transition-opacity" style="opacity:.35;"></div>
+      </div>
+    </div>
+
+    <!-- Steps -->
+    <div class="px-5 py-4 flex-1" style="min-height:200px;">
+      <!-- Step 1: Basic usage -->
+      <div id="ob-step-1">
+        <p class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">שלב 1 מתוך 3 — איך מתחילים</p>
+        <ul class="space-y-2.5 text-sm text-gray-700">
+          <li class="flex gap-2.5 items-start">
+            <i class="fa-solid fa-plus text-indigo-400 mt-0.5 w-4 text-center flex-shrink-0"></i>
+            <span>לחץ <strong>+</strong> (או כפתור הפלוס הצף) להוספת דירה ידנית</span>
+          </li>
+          <li class="flex gap-2.5 items-start">
+            <i class="fa-solid fa-hand-pointer text-indigo-400 mt-0.5 w-4 text-center flex-shrink-0"></i>
+            <span>לחץ על דירה ברשימה לעריכה ולהוספת הערות וסטטוס</span>
+          </li>
+          <li class="flex gap-2.5 items-start">
+            <i class="fa-solid fa-map text-indigo-400 mt-0.5 w-4 text-center flex-shrink-0"></i>
+            <span>עבור בין <strong>רשימה</strong> ל<strong>מפה</strong> בלחצנים בתחתית המסך</span>
+          </li>
+          <li class="flex gap-2.5 items-start">
+            <i class="fa-solid fa-sliders text-indigo-400 mt-0.5 w-4 text-center flex-shrink-0"></i>
+            <span>לחץ <strong>סינון</strong> לסנן לפי עיר, מחיר, סטטוס ועוד</span>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Step 2: AI import -->
+      <div id="ob-step-2" class="hidden">
+        <p class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">שלב 2 מתוך 3 — ייבוא דירות מ-AI</p>
+        <p class="text-sm text-gray-600 mb-3">הדרך המהירה להתחיל: שלח לכל AI (Claude, ChatGPT, Gemini) את הדירות שמצאת — הוא יחזיר JSON מוכן לייבוא.</p>
+        <ol class="space-y-2 text-sm text-gray-700 list-decimal list-inside">
+          <li>פתח את הקובץ <a href="import-prompt.md" target="_blank" class="text-indigo-600 underline font-medium">import-prompt.md</a> והעתק את תוכנו</li>
+          <li>הדבק בשיחת AI ואחריו את פרטי הדירות (טקסט, קישורים, PDF...)</li>
+          <li>שמור את תשובת ה-AI כקובץ <code class="bg-gray-100 px-1 py-0.5 rounded text-xs">.json</code></li>
+          <li>לחץ <strong>⋯ ← ייבוא</strong> ובחר את הקובץ (או הדבק ישירות)</li>
+        </ol>
+      </div>
+
+      <!-- Step 3: Cloud sync -->
+      <div id="ob-step-3" class="hidden">
+        <p class="text-xs font-bold text-indigo-600 uppercase tracking-wider mb-3">שלב 3 מתוך 3 — סנכרון בין מכשירים</p>
+        <p class="text-sm text-gray-600 mb-3">כדי שהנתונים יסתנכרנו בין הטלפון למחשב:</p>
+        <ol class="space-y-2 text-sm text-gray-700 list-decimal list-inside">
+          <li>צור טוקן ב-<strong>github.com</strong> ← Settings ← Developer settings ← Personal access tokens ← סמן scope: <code class="bg-gray-100 px-1 rounded text-xs">gist</code></li>
+          <li>לחץ <strong>⋯ ← סנכרון</strong> <i class="fa-solid fa-cloud text-indigo-400 text-xs"></i> והדבק את הטוקן</li>
+          <li>סרוק את קוד ה-QR שיוצג ממכשיר אחר — וזהו!</li>
+        </ol>
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <div class="px-5 pb-5 flex items-center justify-between flex-shrink-0">
+      <button id="ob-prev" onclick="obNavigate(-1)"
+              class="hidden text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1 py-2 px-3 rounded-lg hover:bg-gray-100 transition">
+        <i class="fa-solid fa-chevron-right text-xs"></i> הקודם
+      </button>
+      <div id="ob-prev-placeholder"></div>
+      <button id="ob-next" onclick="obNavigate(1)"
+              class="bg-indigo-600 text-white text-sm px-5 py-2 rounded-lg hover:bg-indigo-700 transition flex items-center gap-1.5">
+        הבא <i class="fa-solid fa-chevron-left text-xs"></i>
+      </button>
     </div>
   </div>
 </div>
@@ -413,39 +496,13 @@ const STATUSES = [
 const BEFORE_SCHEDULED = new Set(['interested', 'favorite', 'contacted']);
 const STATUS_COLOR = { interested: '#4f46e5', favorite: '#d97706', contacted: '#0284c7', scheduled: '#7c3aed', visited: '#059669', 'not-interested': '#6b7280' };
 
-const DEFAULT_APARTMENTS = [
-    { id:1,  address:'הורדים 11, גבעתיים',               neighborhood:'שכונת הל"ה',              city:'גבעתיים',    price:5500, details:'דירת מגורים',       coords:[32.0737,34.8020], link:'https://www.yad2.co.il/realestate/item/mrpneapg', contact:'מודעה פעילה' },
-    { id:2,  address:'התע"ש 2, גבעתיים',                 neighborhood:'שכונת הל"ה',              city:'גבעתיים',    price:5650, details:'2.5 חדרים, קומה 3', coords:[32.0741,34.8024], link:'https://www.yad2.co.il/realestate/item/w8wcnrtu', contact:'נועם - 073-7821829' },
-    { id:3,  address:'הורדים 4, גבעתיים',                neighborhood:'שכונת הל"ה',              city:'גבעתיים',    price:6200, details:'2 חדרים, קומה 1',   coords:[32.0733,34.8016], link:'https://www.yad2.co.il/realestate/item/2bsdrbpo', contact:'חסי - 073-7834105' },
-    { id:4,  address:"דרך זאב ז'בוטינסקי 63, רמת גן",   neighborhood:'שכונת גפן',               city:'רמת גן',     price:4300, details:'2 חדרים, קומה 3',   coords:[32.0870,34.8141], link:'https://www.yad2.co.il/realestate/item/xmwhdu18', contact:'אידלסון נכסים - 053-6834283' },
-    { id:5,  address:'הדר, רמת גן',                      neighborhood:'שכונת גפן',               city:'רמת גן',     price:5500, details:'2.5 חדרים',         coords:[32.0876,34.8120], link:'https://www.yad2.co.il/realestate/item/kuj62zcs', contact:'מור נכסים - 055-4368253' },
-    { id:6,  address:'דב פרידמן 9, רמת גן',              neighborhood:'שכונת הראשונים',          city:'רמת גן',     price:4800, details:'2 חדרים',            coords:[32.0814,34.8020], link:'https://www.yad2.co.il/realestate/item/wc2qki6v', contact:'יעל - 055-4345169' },
-    { id:7,  address:"זוהר, רמת גן",                     neighborhood:"שכונת בן גוריון / מרכז ג'",city:'רמת גן',    price:6000, details:'דירה מרווחת',       coords:[32.0876,34.8138], link:'https://www.yad2.co.il/realestate/item/lycnw0rt', contact:'י.ר יוסף נדל"ן - 055-4360454' },
-    { id:8,  address:"דרך זאב ז'בוטינסקי 7, רמת גן",    neighborhood:'הבורסה',                  city:'רמת גן',     price:6600, details:'2 חדרים, קומה 32',  coords:[32.0834,34.8037], link:'https://www.yad2.co.il/realestate/item/fixz8tyj', contact:'אריאל - 073-7823260' },
-    { id:9,  address:'המסגר 68, תל אביב יפו',            neighborhood:'מונטיפיורי',              city:'תל אביב יפו',price:5350, details:'דירת מגורים',       coords:[32.0680,34.7874], link:'https://www.yad2.co.il/realestate/item/oxnzsu41', contact:'אורלי - 052-5053002' },
-    { id:10, address:'נהרדעא, תל אביב יפו',              neighborhood:'הצפון החדש - דרום',       city:'תל אביב יפו',price:5500, details:'דירת איכות',         coords:[32.0830,34.7858], link:'https://www.yad2.co.il/realestate/item/u267nfi6', contact:'סטוקהאוס נכסים - 055-4516602' },
-    { id:11, address:'לינקולן, תל אביב יפו',             neighborhood:'לב תל אביב',              city:'תל אביב יפו',price:5600, details:'לב העיר צפון',       coords:[32.0678,34.7802], link:'https://www.yad2.co.il/realestate/item/61lfse7h', contact:'אחיה אורן שיווק נדלן - 055-4360143' },
-    { id:12, address:'וילסון, תל אביב יפו',              neighborhood:'לב תל אביב',              city:'תל אביב יפו',price:5600, details:'לב העיר צפון',       coords:[32.0661,34.7804], link:'https://www.yad2.co.il/realestate/item/s44meiv5', contact:'אחיה אורן שיווק נדלן - 055-4360143' },
-    { id:13, address:'הגדוד העברי 16, תל אביב יפו',      neighborhood:'נווה שאנן',               city:'תל אביב יפו',price:6000, details:'2 חדרים',            coords:[32.0600,34.7755], link:'https://www.yad2.co.il/realestate/item/hl09owui', contact:'שרון - 073-7836258' },
-    { id:14, address:'בנימיני 20, תל אביב יפו',          neighborhood:'נחלת יצחק',               city:'תל אביב יפו',price:6200, details:'2.5 חדרים',         coords:[32.0783,34.7991], link:'https://www.yad2.co.il/realestate/item/9q4c48fz', contact:'אייל - 054-4753429' },
-    { id:15, address:'יגאל אלון 154, תל אביב יפו',       neighborhood:'נחלת יצחק',               city:'תל אביב יפו',price:7000, details:'3 חדרים',            coords:[32.0772,34.7967], link:'https://www.yad2.co.il/realestate/item/j6j38nfc', contact:'אברהם - 054-6444160' },
-    { id:16, address:'שפרינצק 1, תל אביב יפו',           neighborhood:'גני שרונה',               city:'תל אביב יפו',price:6900, details:'קרית הממשלה',        coords:[32.0708,34.7827], link:'https://www.yad2.co.il/realestate/item/8a8tmcog', contact:'אביב - 050-8237070' },
-];
-
 // ── LocalStorage ──────────────────────────────────────────────────────────
 function loadApartments() {
     try {
         const raw = localStorage.getItem(DATA_KEY);
         if (raw) return JSON.parse(raw);
     } catch {}
-    return initDefaults();
-}
-
-function initDefaults() {
-    const today = new Date().toISOString().slice(0, 10);
-    const data = DEFAULT_APARTMENTS.map(a => ({ ...a, status: 'interested', notes: '', dateAdded: today }));
-    saveApartments(data);
-    return data;
+    return [];
 }
 
 function saveApartments(data) {
@@ -1187,10 +1244,50 @@ function showImportError(msg) {
 }
 
 function resetToDefaults() {
-    if (!confirm('לאפס את כל הרשימה לברירת המחדל? כל השינויים יאבדו.')) return;
-    initDefaults();
+    if (!confirm('למחוק את כל הדירות? פעולה זו אינה הפיכה.')) return;
+    saveApartments([]);
     closeImportModal();
     buildApp();
+}
+
+// ── Onboarding ────────────────────────────────────────────────────────────
+const ONBOARDING_KEY = 'apt-onboarding-v1';
+let obStep = 1;
+const OB_TOTAL = 3;
+
+function showOnboarding() {
+    if (localStorage.getItem(ONBOARDING_KEY)) return;
+    document.getElementById('modal-onboarding').classList.remove('hidden');
+    obRender();
+}
+
+function dismissOnboarding() {
+    localStorage.setItem(ONBOARDING_KEY, '1');
+    document.getElementById('modal-onboarding').classList.add('hidden');
+}
+
+function obNavigate(dir) {
+    obStep = Math.max(1, Math.min(OB_TOTAL, obStep + dir));
+    obRender();
+}
+
+function obRender() {
+    for (let i = 1; i <= OB_TOTAL; i++) {
+        document.getElementById(`ob-step-${i}`).classList.toggle('hidden', i !== obStep);
+    }
+    document.querySelectorAll('.ob-dot').forEach((d, i) => {
+        d.style.opacity = i + 1 === obStep ? '1' : '.35';
+    });
+    const prev = document.getElementById('ob-prev');
+    const placeholder = document.getElementById('ob-prev-placeholder');
+    const next = document.getElementById('ob-next');
+    const isLast = obStep === OB_TOTAL;
+    prev.classList.toggle('hidden', obStep === 1);
+    placeholder.classList.toggle('hidden', obStep > 1);
+    next.innerHTML = isLast
+        ? 'התחל <i class="fa-solid fa-check text-xs"></i>'
+        : 'הבא <i class="fa-solid fa-chevron-left text-xs"></i>';
+    next.onclick = isLast ? dismissOnboarding : () => obNavigate(1);
 }
 
 // ── Mobile UI ─────────────────────────────────────────────────────────────
@@ -1379,6 +1476,7 @@ function closeSyncModal() { document.getElementById('modal-sync').classList.add(
 
     buildApp();
     loadTransitStations();
+    showOnboarding();
 
     // Re-pull on tab focus (other device may have written)
     document.addEventListener('visibilitychange', () => {
