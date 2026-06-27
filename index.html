@@ -1071,6 +1071,7 @@ function submitAptForm(e) {
         notes:        base.notes     || '',
         dateAdded:    base.dateAdded || today,
         entryDate:    document.getElementById('f-entry-date').value || null,
+        updatedAt:    Date.now(),
     };
 
     if (editId) {
@@ -1190,9 +1191,10 @@ function saveNotes() {
     const visitDate = document.getElementById('visit-date').value || null;
     let status = pendingStatus || apts[idx].status;
     if (visitDate && BEFORE_SCHEDULED.has(status)) status = 'scheduled';
-    apts[idx].notes     = document.getElementById('notes-text').value.trim();
-    apts[idx].status    = status;
-    apts[idx].visitDate = visitDate;
+    apts[idx].notes      = document.getElementById('notes-text').value.trim();
+    apts[idx].status     = status;
+    apts[idx].visitDate  = visitDate;
+    apts[idx].updatedAt  = Date.now();
     saveApartments(apts);
     closeMainModal();
     buildApp(false);
@@ -1228,9 +1230,10 @@ async function doImport() {
             showImportError(`שגיאה בפריט ${i+1}: חסרים שדות (address, city, price, coords)`); return;
         }
         // Fill optional status/notes for imported entries that lack them
-        if (!a.status) a.status = 'interested';
-        if (!a.notes)  a.notes  = '';
-        if (!a.id)     a.id     = Date.now() + i;
+        if (!a.status)    a.status    = 'interested';
+        if (!a.notes)     a.notes     = '';
+        if (!a.id)        a.id        = Date.now() + i;
+        if (!a.updatedAt) a.updatedAt = Date.now();
     }
     saveApartments(data);
     closeImportModal();
@@ -1384,10 +1387,24 @@ async function gistRead() {
     } catch { syncDot('error'); return null; }
 }
 
+function mergeApartments(local, remote) {
+    const merged = new Map(local.map(a => [a.id, a]));
+    remote.forEach(r => {
+        const l = merged.get(r.id);
+        if (!l || (r.updatedAt || 0) > (l.updatedAt || 0)) merged.set(r.id, r);
+    });
+    return Array.from(merged.values());
+}
+
 async function syncFromGist() {
     const remote = await gistRead();
     if (!remote) return;
-    localStorage.setItem(DATA_KEY, JSON.stringify(remote));
+    const local  = loadApartments();
+    const merged = mergeApartments(local, remote);
+    localStorage.setItem(DATA_KEY, JSON.stringify(merged));
+    // If local had newer/extra entries, push the merged result back up
+    const remoteKeys = new Set(remote.map(a => `${a.id}:${a.updatedAt||0}`));
+    if (merged.some(a => !remoteKeys.has(`${a.id}:${a.updatedAt||0}`))) gistWrite(merged);
     buildApp(false);
 }
 
@@ -1455,6 +1472,35 @@ function openSyncModal() {
     document.getElementById('modal-sync').classList.remove('hidden');
 }
 function closeSyncModal() { document.getElementById('modal-sync').classList.add('hidden'); }
+
+// ── Single-tab enforcement ────────────────────────────────────────────────
+(function enforeSingleTab() {
+    const ch = new BroadcastChannel('apt-hunter-tab');
+    ch.onmessage = e => {
+        if (e.data === 'hello') ch.postMessage('alive');
+        if (e.data === 'alive') {
+            const banner = document.createElement('div');
+            Object.assign(banner.style, {
+                position:'fixed', top:'0', left:'0', right:'0', zIndex:'9999',
+                background:'#fef3c7', borderBottom:'2px solid #d97706',
+                padding:'10px 16px', display:'flex', alignItems:'center',
+                justifyContent:'space-between', fontFamily:'Rubik,sans-serif',
+            });
+            banner.dir = 'rtl';
+            banner.innerHTML = `
+                <span style="font-size:13px;color:#92400e;">
+                    <i class="fa-solid fa-triangle-exclamation" style="margin-left:6px;color:#d97706;"></i>
+                    האפליקציה כבר פתוחה בטאב אחר — שינויים עלולים להתנגש
+                </span>
+                <button onclick="window.close()" style="font-size:12px;background:#d97706;color:white;border:none;padding:5px 14px;border-radius:6px;cursor:pointer;font-family:Rubik,sans-serif;">
+                    סגור טאב זה
+                </button>`;
+            document.body.appendChild(banner);
+        }
+    };
+    ch.postMessage('hello');
+    window.addEventListener('beforeunload', () => ch.postMessage('closing'));
+})();
 
 // ── Init ──────────────────────────────────────────────────────────────────
 (async function init() {
