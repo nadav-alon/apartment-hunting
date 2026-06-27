@@ -82,8 +82,8 @@
                 <i class="fa-solid fa-briefcase text-sm"></i>
             </div>
             <div>
-                <div class="text-xs font-bold text-red-900">יעד הגעה: מגדל אלון 1</div>
-                <div class="text-[10px] text-red-700">יגאל אלון 94, תל אביב</div>
+                <div id="workplace-name" class="text-xs font-bold text-red-900">יעד הגעה: מגדל אלון 1</div>
+                <div id="workplace-address" class="text-[10px] text-red-700">יגאל אלון 94, תל אביב</div>
             </div>
         </div>
         <span class="text-[10px] bg-red-200 text-red-800 font-bold px-2 py-0.5 rounded-full flex-shrink-0">עבודה</span>
@@ -481,7 +481,8 @@
 
 <script>
 // ── Constants ─────────────────────────────────────────────────────────────
-const WORKPLACE_COORDS = [32.06849, 34.79414];
+const WORKPLACE_KEY = 'apt-workplace-v1';
+const DEFAULT_WORKPLACE = { name: 'מגדל אלון 1', address: 'יגאל אלון 94, תל אביב', coords: [32.06849, 34.79414] };
 const DATA_KEY = 'apt-hunting-v1';
 
 const STATUSES = [
@@ -507,7 +508,29 @@ function loadApartments() {
 
 function saveApartments(data) {
     localStorage.setItem(DATA_KEY, JSON.stringify(data));
-    gistWrite(data);
+    gistPushAll();
+}
+
+function loadWorkplace() {
+    try {
+        const raw = localStorage.getItem(WORKPLACE_KEY);
+        if (raw) return { ...DEFAULT_WORKPLACE, ...JSON.parse(raw) };
+    } catch {}
+    return DEFAULT_WORKPLACE;
+}
+
+function saveWorkplace(wp) {
+    localStorage.setItem(WORKPLACE_KEY, JSON.stringify(wp));
+    gistPushAll();
+}
+
+function updateWorkplaceDisplay() {
+    const wp = loadWorkplace();
+    const nameEl = document.getElementById('workplace-name');
+    const addrEl = document.getElementById('workplace-address');
+    if (nameEl) nameEl.textContent = `יעד הגעה: ${wp.name}`;
+    if (addrEl) addrEl.textContent = wp.address;
+    updateWorkplaceMarker();
 }
 
 function exportData() {
@@ -531,7 +554,7 @@ function calcDist(c1, c2) {
 }
 
 // ── Map + icons ───────────────────────────────────────────────────────────
-const map = L.map('map').setView(WORKPLACE_COORDS, 13);
+const map = L.map('map').setView(loadWorkplace().coords, 13);
 L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
     attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
 }).addTo(map);
@@ -558,11 +581,17 @@ const railLayer      = L.layerGroup().addTo(map);
 const tramLayer      = L.layerGroup().addTo(map);
 const layerState     = { rail: true, tram: true };
 
-L.marker(WORKPLACE_COORDS, { icon: workplaceIcon })
-    .bindPopup(`<div style="text-align:right;font-family:Rubik,sans-serif;padding:4px;">
-        <strong style="color:#dc2626;">מקום עבודה: מגדל אלון 1</strong><br>
-        <span style="font-size:11px;color:#6b7280;">יגאל אלון 94, תל אביב</span></div>`)
-    .addTo(map);
+let workplaceMarker = null;
+function updateWorkplaceMarker() {
+    const wp = loadWorkplace();
+    if (workplaceMarker) workplaceMarker.remove();
+    workplaceMarker = L.marker(wp.coords, { icon: workplaceIcon })
+        .bindPopup(`<div style="text-align:right;font-family:Rubik,sans-serif;padding:4px;">
+            <strong style="color:#dc2626;">מקום עבודה: ${wp.name}</strong><br>
+            <span style="font-size:11px;color:#6b7280;">${wp.address}</span></div>`)
+        .addTo(map);
+}
+updateWorkplaceMarker();
 
 // ── Filter state ──────────────────────────────────────────────────────────
 let currentCityFilter  = 'all';
@@ -721,6 +750,7 @@ function syncSlider(apts) {
 // ── Build app ─────────────────────────────────────────────────────────────
 function buildApp(fitMap = true) {
     const apts = loadApartments();
+    updateWorkplaceDisplay();
     syncSlider(apts);
     rebuildCityFilter(apts);
     renderStatusFilterButtons();
@@ -744,7 +774,8 @@ function buildApp(fitMap = true) {
         return true;
     }).sort((a, b) => {
         if (currentSort === 'distance') {
-            return calcDist(a.coords, WORKPLACE_COORDS).km - calcDist(b.coords, WORKPLACE_COORDS).km;
+            const wpCoords = loadWorkplace().coords;
+            return calcDist(a.coords, wpCoords).km - calcDist(b.coords, wpCoords).km;
         }
         if (currentSort === 'entryDate') {
             const rank = v => !v ? 3 : v === 'asap' ? 0 : v === 'flexible' ? 2 : 1;
@@ -765,10 +796,11 @@ function buildApp(fitMap = true) {
         return;
     }
 
-    const bounds = [WORKPLACE_COORDS];
+    const wpCoords = loadWorkplace().coords;
+    const bounds = [wpCoords];
 
     visible.forEach(apt => {
-        const dist     = calcDist(apt.coords, WORKPLACE_COORDS);
+        const dist     = calcDist(apt.coords, wpCoords);
         const sc       = STATUSES.find(s => s.value === apt.status) || STATUSES[0];
         const hasNotes = apt.notes && apt.notes.trim().length > 0;
         const isToday  = apt.visitDate === todayStr;
@@ -1358,15 +1390,16 @@ function gistHeaders(token) {
     return { Authorization: `token ${token}`, 'Content-Type': 'application/json', 'User-Agent': 'apartment-hunter/1.0' };
 }
 
-async function gistWrite(apts) {
+async function gistPushAll() {
     const cfg = getSyncConfig();
     if (!cfg) return;
     syncDot('syncing');
+    const payload = { v: 2, apartments: loadApartments(), workplace: loadWorkplace() };
     try {
         const r = await fetch(`https://api.github.com/gists/${cfg.gistId}`, {
             method: 'PATCH',
             headers: gistHeaders(cfg.token),
-            body: JSON.stringify({ files: { [GIST_FILE]: { content: JSON.stringify(apts) } } })
+            body: JSON.stringify({ files: { [GIST_FILE]: { content: JSON.stringify(payload) } } })
         });
         syncDot(r.ok ? 'ok' : 'error');
     } catch { syncDot('error'); }
@@ -1383,7 +1416,9 @@ async function gistRead() {
         const content = data.files?.[GIST_FILE]?.content;
         if (!content) { syncDot('error'); return null; }
         syncDot('ok');
-        return JSON.parse(content);
+        const parsed = JSON.parse(content);
+        if (Array.isArray(parsed)) return { apartments: parsed, workplace: null }; // v1 format
+        return { apartments: parsed.apartments || [], workplace: parsed.workplace || null };
     } catch { syncDot('error'); return null; }
 }
 
@@ -1399,12 +1434,14 @@ function mergeApartments(local, remote) {
 async function syncFromGist() {
     const remote = await gistRead();
     if (!remote) return;
+    const { apartments: remoteApts, workplace: remoteWp } = remote;
     const local  = loadApartments();
-    const merged = mergeApartments(local, remote);
+    const merged = mergeApartments(local, remoteApts);
     localStorage.setItem(DATA_KEY, JSON.stringify(merged));
+    if (remoteWp) localStorage.setItem(WORKPLACE_KEY, JSON.stringify(remoteWp));
     // If local had newer/extra entries, push the merged result back up
-    const remoteKeys = new Set(remote.map(a => `${a.id}:${a.updatedAt||0}`));
-    if (merged.some(a => !remoteKeys.has(`${a.id}:${a.updatedAt||0}`))) gistWrite(merged);
+    const remoteKeys = new Set(remoteApts.map(a => `${a.id}:${a.updatedAt||0}`));
+    if (merged.some(a => !remoteKeys.has(`${a.id}:${a.updatedAt||0}`))) gistPushAll();
     buildApp(false);
 }
 
@@ -1416,7 +1453,7 @@ async function findOrCreateGist(token) {
     if (existing) return existing.id;
     const created = await fetch('https://api.github.com/gists', {
         method: 'POST', headers: h,
-        body: JSON.stringify({ description: GIST_DESC, public: false, files: { [GIST_FILE]: { content: JSON.stringify(loadApartments()) } } })
+        body: JSON.stringify({ description: GIST_DESC, public: false, files: { [GIST_FILE]: { content: JSON.stringify({ v: 2, apartments: loadApartments(), workplace: loadWorkplace() }) } } })
     }).then(r => r.json());
     if (!created.id) throw new Error('יצירת Gist נכשלה');
     return created.id;
@@ -1517,7 +1554,10 @@ function closeSyncModal() { document.getElementById('modal-sync').classList.add(
 
     // Pull from Gist before first render
     const remote = await gistRead();
-    if (remote) localStorage.setItem(DATA_KEY, JSON.stringify(remote));
+    if (remote) {
+        localStorage.setItem(DATA_KEY, JSON.stringify(remote.apartments));
+        if (remote.workplace) localStorage.setItem(WORKPLACE_KEY, JSON.stringify(remote.workplace));
+    }
     if (!getSyncConfig()) syncDot('off');
 
     buildApp();
