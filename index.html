@@ -139,9 +139,14 @@
   <div class="bg-white rounded-xl shadow-2xl w-full max-w-md max-h-[90vh] flex flex-col" dir="rtl">
     <!-- Header -->
     <div class="bg-indigo-900 text-white rounded-t-xl flex-shrink-0">
-      <div class="flex items-center justify-between px-4 pt-3 pb-2">
-        <h2 id="modal-main-title" class="font-bold text-sm truncate max-w-[240px]"></h2>
-        <button onclick="closeMainModal()" class="text-indigo-200 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+      <div class="flex items-center justify-between px-4 pt-3 pb-2 gap-2">
+        <div class="flex items-center gap-2 min-w-0">
+          <h2 id="modal-main-title" class="font-bold text-sm truncate"></h2>
+          <a id="modal-yad2-link" href="#" target="_blank" class="hidden flex-shrink-0 text-[11px] font-semibold text-indigo-300 hover:text-white whitespace-nowrap">
+            Yad2 <i class="fa-solid fa-up-right-from-square" style="font-size:9px;"></i>
+          </a>
+        </div>
+        <button onclick="closeMainModal()" class="flex-shrink-0 text-indigo-200 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
       </div>
       <!-- Tab bar (hidden in add mode) -->
       <div id="modal-tabs" class="flex">
@@ -758,10 +763,17 @@ function _populateNotesTab(apt) {
     renderStatusButtons(pendingStatus);
 }
 
+function _setModalYad2(link) {
+    const el = document.getElementById('modal-yad2-link');
+    if (link) { el.href = link; el.classList.remove('hidden'); }
+    else       { el.href = '#'; el.classList.add('hidden'); }
+}
+
 function openAddModal() {
     currentEditId = null;
     document.getElementById('modal-main-title').textContent = 'הוספת דירה חדשה';
     document.getElementById('modal-tabs').style.display = 'none';
+    _setModalYad2(null);
     document.getElementById('form-apt').reset();
     document.getElementById('f-id').value = '';
     document.getElementById('geocode-status').textContent = '';
@@ -778,6 +790,7 @@ function openEditModal(id) {
     currentEditId = id;
     document.getElementById('modal-main-title').textContent = apt.address;
     document.getElementById('modal-tabs').style.display = '';
+    _setModalYad2(apt.link || null);
     _populateEditForm(apt);
     switchTab('edit');
     document.getElementById('modal-main').classList.remove('hidden');
@@ -935,6 +948,7 @@ function openNotesModal(id) {
     currentEditId = id;
     document.getElementById('modal-main-title').textContent = apt.address;
     document.getElementById('modal-tabs').style.display = '';
+    _setModalYad2(apt.link || null);
     _populateEditForm(apt);
     _populateNotesTab(apt);
     switchTab('notes');
