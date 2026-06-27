@@ -21,10 +21,11 @@
         }
     </style>
 </head>
-<body class="bg-gray-50 h-screen overflow-hidden flex flex-col md:flex-row">
+<body class="bg-gray-50 h-screen overflow-hidden flex flex-col md:flex-row relative">
 
 <!-- ── Sidebar ────────────────────────────────────────────────────────────── -->
-<div class="w-full md:w-96 bg-white shadow-xl flex flex-col z-10 h-1/2 md:h-full">
+<!-- ── Sidebar ────────────────────────────────────────────────────────────── -->
+<div id="sidebar" class="w-full md:w-96 bg-white shadow-xl flex flex-col z-10 h-full">
 
     <!-- Header -->
     <div class="p-4 bg-indigo-900 text-white flex-shrink-0">
@@ -32,31 +33,50 @@
             <h1 class="text-lg font-bold flex items-center gap-2">
                 <i class="fa-solid fa-map-location-dot"></i> מפת הדירות שלי
             </h1>
-            <div class="flex gap-1.5">
+            <div class="flex gap-1.5 items-center">
+                <!-- Desktop-only buttons -->
                 <button onclick="openAddModal()" title="הוסף דירה חדשה"
-                        class="w-8 h-8 rounded-lg bg-white/20 hover:bg-white/30 flex items-center justify-center transition">
+                        class="hidden md:flex w-8 h-8 rounded-lg bg-white/20 hover:bg-white/30 items-center justify-center transition">
                     <i class="fa-solid fa-plus text-sm"></i>
                 </button>
                 <button onclick="openImportModal()" title="ייבוא JSON"
-                        class="w-8 h-8 rounded-lg bg-white/20 hover:bg-white/30 flex items-center justify-center transition">
+                        class="hidden md:flex w-8 h-8 rounded-lg bg-white/20 hover:bg-white/30 items-center justify-center transition">
                     <i class="fa-solid fa-file-import text-sm"></i>
                 </button>
                 <button onclick="exportData()" title="ייצוא JSON"
-                        class="w-8 h-8 rounded-lg bg-white/20 hover:bg-white/30 flex items-center justify-center transition">
+                        class="hidden md:flex w-8 h-8 rounded-lg bg-white/20 hover:bg-white/30 items-center justify-center transition">
                     <i class="fa-solid fa-file-export text-sm"></i>
                 </button>
                 <button onclick="openSyncModal()" id="btn-sync" title="סנכרון בין מכשירים"
-                        class="w-8 h-8 rounded-lg bg-white/20 hover:bg-white/30 flex items-center justify-center transition relative">
+                        class="hidden md:flex w-8 h-8 rounded-lg bg-white/20 hover:bg-white/30 items-center justify-center transition relative">
                     <i class="fa-solid fa-cloud text-sm"></i>
                     <span id="sync-dot" class="hidden absolute top-0.5 right-0.5 w-2 h-2 rounded-full border border-indigo-900"></span>
                 </button>
+                <!-- Mobile overflow menu -->
+                <div class="md:hidden relative">
+                    <button onclick="toggleOverflow()" id="btn-overflow"
+                            class="w-8 h-8 rounded-lg bg-white/20 hover:bg-white/30 flex items-center justify-center transition">
+                        <i class="fa-solid fa-ellipsis-vertical text-sm"></i>
+                    </button>
+                    <div id="overflow-menu" class="hidden absolute left-0 top-full mt-1 bg-white rounded-xl shadow-xl py-1 z-50" style="min-width:140px;" dir="rtl">
+                        <button onclick="openImportModal();closeOverflow()" class="w-full text-right px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                            <i class="fa-solid fa-file-import text-gray-400" style="width:16px;"></i> ייבוא
+                        </button>
+                        <button onclick="exportData();closeOverflow()" class="w-full text-right px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                            <i class="fa-solid fa-file-export text-gray-400" style="width:16px;"></i> ייצוא
+                        </button>
+                        <button onclick="openSyncModal();closeOverflow()" class="w-full text-right px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                            <i class="fa-solid fa-cloud text-gray-400" style="width:16px;"></i> סנכרון
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
-        <p class="text-xs text-indigo-200 mt-0.5">חיפוש דירות והערכת מרחק למקום העבודה</p>
+        <p class="hidden md:block text-xs text-indigo-200 mt-0.5">חיפוש דירות והערכת מרחק למקום העבודה</p>
     </div>
 
-    <!-- Workplace -->
-    <div class="p-3 bg-red-50 border-b border-red-100 flex items-center justify-between flex-shrink-0">
+    <!-- Workplace (desktop only) -->
+    <div class="hidden md:flex p-3 bg-red-50 border-b border-red-100 items-center justify-between flex-shrink-0">
         <div class="flex items-center gap-2">
             <div class="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center text-white flex-shrink-0">
                 <i class="fa-solid fa-briefcase text-sm"></i>
@@ -70,58 +90,67 @@
     </div>
 
     <!-- Filters -->
-    <div class="p-3 bg-gray-50 border-b border-gray-100 flex-shrink-0 space-y-2.5">
-        <!-- Search -->
-        <input id="search-input" type="text" placeholder="חיפוש לפי כתובת, שכונה, עיר..."
-               oninput="updateSearch(this.value)"
-               class="w-full border rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
-
-        <!-- City -->
-        <div>
-            <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">עיר</div>
-            <div class="grid grid-cols-4 gap-1" id="city-filter-btns"></div>
+    <div class="p-3 bg-gray-50 border-b border-gray-100 flex-shrink-0 space-y-2">
+        <!-- Search + advanced toggle -->
+        <div class="flex gap-2">
+            <input id="search-input" type="text" placeholder="חיפוש לפי כתובת, שכונה, עיר..."
+                   oninput="updateSearch(this.value)"
+                   class="flex-1 border rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400">
+            <button id="btn-adv-toggle" onclick="toggleAdvancedFilters()"
+                    class="md:hidden flex items-center gap-1 px-3 py-1.5 rounded-lg border text-[11px] font-medium bg-white text-gray-600 border-gray-200 whitespace-nowrap transition">
+                <i class="fa-solid fa-sliders" style="font-size:10px;"></i> סינון
+            </button>
         </div>
 
-        <!-- Price -->
-        <div class="flex items-center justify-between gap-3">
-            <label for="maxPrice" class="text-xs text-gray-600 whitespace-nowrap">
-                מחיר: <span id="priceVal" class="font-bold text-indigo-600"></span>
-            </label>
-            <input type="range" id="maxPrice" min="1000" step="100"
-                   class="w-1/2 accent-indigo-600" oninput="updatePriceFilter(this.value)">
-        </div>
-
-        <!-- Status filter -->
+        <!-- Status filter (always visible) -->
         <div>
             <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">סטטוס</div>
             <div class="flex gap-1 flex-wrap" id="status-filter-btns"></div>
         </div>
 
-        <!-- Quick filters + sort -->
-        <div class="flex items-center gap-2 flex-wrap">
+        <!-- Visiting today (always visible) -->
+        <div>
             <button onclick="toggleVisitingToday()" id="btn-visiting-today"
                     class="text-[11px] font-medium py-1 px-2.5 rounded-lg border transition flex items-center gap-1 bg-white text-gray-600 border-gray-200 hover:bg-gray-100">
                 <i class="fa-solid fa-calendar-day" style="font-size:10px;"></i> ביקור היום
             </button>
-            <span class="text-gray-300">|</span>
-            <span class="text-[10px] font-bold text-gray-400 uppercase">מיון:</span>
-            <button onclick="setSort('price')"     id="sort-price" class="sort-btn text-[11px] py-0.5 px-2 rounded-lg border transition bg-indigo-600 text-white border-indigo-600">מחיר</button>
-            <button onclick="setSort('distance')"  id="sort-dist"  class="sort-btn text-[11px] py-0.5 px-2 rounded-lg border transition bg-white text-gray-600 border-gray-200 hover:bg-gray-100">מרחק</button>
-            <button onclick="setSort('entryDate')" id="sort-entry" class="sort-btn text-[11px] py-0.5 px-2 rounded-lg border transition bg-white text-gray-600 border-gray-200 hover:bg-gray-100">כניסה</button>
         </div>
 
-        <!-- Transit -->
-        <div class="flex items-center gap-2">
-            <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">תחנות:</span>
-            <button onclick="toggleLayer('rail')" id="btn-rail"
-                    class="text-[11px] font-medium py-0.5 px-2 rounded-lg flex items-center gap-1 bg-green-700 text-white border border-green-700 transition">
-                <i class="fa-solid fa-train" style="font-size:9px;"></i> רכבת
-            </button>
-            <button onclick="toggleLayer('tram')" id="btn-tram"
-                    class="text-[11px] font-medium py-0.5 px-2 rounded-lg flex items-center gap-1 bg-purple-700 text-white border border-purple-700 transition">
-                <i class="fa-solid fa-tram" style="font-size:9px;"></i> רכבת קלה
-            </button>
-            <span id="transit-status" class="text-[10px] text-gray-400">טוען...</span>
+        <!-- Advanced filters: hidden on mobile until toggled, always visible on desktop -->
+        <div id="advanced-filters" class="hidden md:block space-y-2.5">
+            <!-- City -->
+            <div>
+                <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">עיר</div>
+                <div class="grid grid-cols-4 gap-1" id="city-filter-btns"></div>
+            </div>
+            <!-- Price -->
+            <div class="flex items-center justify-between gap-3">
+                <label for="maxPrice" class="text-xs text-gray-600 whitespace-nowrap">
+                    מחיר: <span id="priceVal" class="font-bold text-indigo-600"></span>
+                </label>
+                <input type="range" id="maxPrice" min="1000" step="100"
+                       class="w-1/2 accent-indigo-600" oninput="updatePriceFilter(this.value)">
+            </div>
+            <!-- Sort -->
+            <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-[10px] font-bold text-gray-400 uppercase">מיון:</span>
+                <button onclick="setSort('price')"     id="sort-price" class="sort-btn text-[11px] py-0.5 px-2 rounded-lg border transition bg-indigo-600 text-white border-indigo-600">מחיר</button>
+                <button onclick="setSort('distance')"  id="sort-dist"  class="sort-btn text-[11px] py-0.5 px-2 rounded-lg border transition bg-white text-gray-600 border-gray-200 hover:bg-gray-100">מרחק</button>
+                <button onclick="setSort('entryDate')" id="sort-entry" class="sort-btn text-[11px] py-0.5 px-2 rounded-lg border transition bg-white text-gray-600 border-gray-200 hover:bg-gray-100">כניסה</button>
+            </div>
+            <!-- Transit -->
+            <div class="flex items-center gap-2">
+                <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">תחנות:</span>
+                <button onclick="toggleLayer('rail')" id="btn-rail"
+                        class="text-[11px] font-medium py-0.5 px-2 rounded-lg flex items-center gap-1 bg-green-700 text-white border border-green-700 transition">
+                    <i class="fa-solid fa-train" style="font-size:9px;"></i> רכבת
+                </button>
+                <button onclick="toggleLayer('tram')" id="btn-tram"
+                        class="text-[11px] font-medium py-0.5 px-2 rounded-lg flex items-center gap-1 bg-purple-700 text-white border border-purple-700 transition">
+                    <i class="fa-solid fa-tram" style="font-size:9px;"></i> רכבת קלה
+                </button>
+                <span id="transit-status" class="text-[10px] text-gray-400">טוען...</span>
+            </div>
         </div>
     </div>
 
@@ -132,12 +161,35 @@
     <div class="p-2.5 bg-gray-50 border-t border-gray-100 text-center text-xs text-gray-500 flex-shrink-0">
         נמצאו <span id="listings-count" class="font-bold text-indigo-600">0</span> דירות
     </div>
+    <!-- Spacer so footer clears the fixed tab bar on mobile -->
+    <div class="h-14 flex-shrink-0 md:hidden"></div>
 </div>
 
 <!-- ── Map ────────────────────────────────────────────────────────────────── -->
-<div class="flex-1 h-1/2 md:h-full relative" dir="ltr">
+<div id="map-container" class="flex-1 h-full relative hidden md:block" dir="ltr">
     <div id="map"></div>
 </div>
+
+<!-- ── Mobile bottom tab bar ─────────────────────────────────────────────── -->
+<div class="fixed bottom-0 left-0 right-0 h-14 bg-white border-t border-gray-200 flex md:hidden z-20">
+    <button id="mob-tab-list" onclick="setMobileView('list')"
+            class="flex-1 flex flex-col items-center justify-center gap-0.5">
+        <i class="fa-solid fa-list text-base" style="color:#4f46e5;"></i>
+        <span class="text-[10px] font-medium" style="color:#4f46e5;">רשימה</span>
+    </button>
+    <button id="mob-tab-map" onclick="setMobileView('map')"
+            class="flex-1 flex flex-col items-center justify-center gap-0.5">
+        <i class="fa-solid fa-map text-base" style="color:#9ca3af;"></i>
+        <span class="text-[10px] font-medium" style="color:#9ca3af;">מפה</span>
+    </button>
+</div>
+
+<!-- ── Mobile FAB ─────────────────────────────────────────────────────────── -->
+<button onclick="openAddModal()"
+        class="md:hidden fixed z-20 flex items-center justify-center bg-indigo-600 hover:bg-indigo-700 text-white rounded-full shadow-xl transition"
+        style="bottom:72px;right:16px;width:56px;height:56px;">
+    <i class="fa-solid fa-plus text-xl"></i>
+</button>
 
 <!-- ── Add / Edit Apartment Modal ─────────────────────────────────────────── -->
 <!-- ── Unified Edit / Notes Modal ─────────────────────────────────────────── -->
@@ -697,7 +749,10 @@ function buildApp(fitMap = true) {
         const card = document.createElement('div');
         const dimmed = apt.status === 'not-interested';
         card.className = `p-3 cursor-pointer transition border-b border-gray-100 flex justify-between items-start gap-2 group ${dimmed ? 'opacity-50' : 'hover:bg-indigo-50/50'}`;
-        card.onclick = () => { map.setView(apt.coords, 15); marker.openPopup(); };
+        card.onclick = () => {
+            if (window.innerWidth < 768) { openNotesModal(apt.id); }
+            else { map.setView(apt.coords, 15); marker.openPopup(); }
+        };
 
         card.innerHTML = `
             <div class="flex-1 min-w-0">
@@ -1137,6 +1192,51 @@ function resetToDefaults() {
     closeImportModal();
     buildApp();
 }
+
+// ── Mobile UI ─────────────────────────────────────────────────────────────
+function setMobileView(view) {
+    if (window.innerWidth >= 768) return;
+    const sidebar      = document.getElementById('sidebar');
+    const mapContainer = document.getElementById('map-container');
+    const listIcon  = document.querySelector('#mob-tab-list i');
+    const listLabel = document.querySelector('#mob-tab-list span');
+    const mapIcon   = document.querySelector('#mob-tab-map i');
+    const mapLabel  = document.querySelector('#mob-tab-map span');
+    const active = '#4f46e5', inactive = '#9ca3af';
+
+    if (view === 'list') {
+        sidebar.classList.remove('hidden');
+        mapContainer.classList.add('hidden');
+        listIcon.style.color = active;  listLabel.style.color = active;
+        mapIcon.style.color  = inactive; mapLabel.style.color  = inactive;
+    } else {
+        sidebar.classList.add('hidden');
+        mapContainer.classList.remove('hidden');
+        setTimeout(() => map.invalidateSize(), 50);
+        listIcon.style.color = inactive; listLabel.style.color = inactive;
+        mapIcon.style.color  = active;  mapLabel.style.color  = active;
+    }
+}
+
+function toggleAdvancedFilters() {
+    const el  = document.getElementById('advanced-filters');
+    const btn = document.getElementById('btn-adv-toggle');
+    const opening = el.classList.contains('hidden');
+    el.classList.toggle('hidden', !opening);
+    Object.assign(btn.style, opening
+        ? { background: '#4f46e5', color: 'white', borderColor: '#4f46e5' }
+        : { background: 'white',   color: '#4b5563', borderColor: '#e5e7eb' });
+}
+
+function toggleOverflow() {
+    document.getElementById('overflow-menu').classList.toggle('hidden');
+}
+function closeOverflow() {
+    document.getElementById('overflow-menu').classList.add('hidden');
+}
+document.addEventListener('click', e => {
+    if (!e.target.closest('#overflow-menu') && !e.target.closest('#btn-overflow')) closeOverflow();
+});
 
 // ── Gist sync ─────────────────────────────────────────────────────────────
 const SYNC_KEY = 'apt-sync-v1';
