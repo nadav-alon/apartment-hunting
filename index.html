@@ -242,7 +242,7 @@
         <div>
           <div class="text-xs font-bold text-gray-500 mb-1.5">תאריך ביקור</div>
           <input type="text" id="visit-date-text" dir="ltr"
-                 placeholder="5.6  ·  5.6.26  ·  היום  ·  מחר"
+                 placeholder="5.6 · היום · מחר · שישי הקרוב"
                  oninput="onVisitDateInput(this.value)"
                  class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400">
           <input type="hidden" id="visit-date">
@@ -907,6 +907,19 @@ function deleteApartment(id) {
 }
 
 // ── Visit date parsing ────────────────────────────────────────────────────
+const HEB_DAYS = { 'ראשון':0, 'שני':1, 'שלישי':2, 'רביעי':3, 'חמישי':4, 'שישי':5, 'שבת':6 };
+
+// includeToday=true → הקרוב (returns today if it's already that weekday)
+// includeToday=false → הבא  (always at least 1 day ahead)
+function nextWeekdayISO(targetDay, includeToday) {
+    const now  = new Date();
+    let diff   = targetDay - now.getDay();
+    if (diff < 0 || (diff === 0 && !includeToday)) diff += 7;
+    const d = new Date(now);
+    d.setDate(d.getDate() + diff);
+    return d.toISOString().slice(0, 10);
+}
+
 function parseFlexDate(raw) {
     const s = raw.trim().toLowerCase();
     if (!s) return null;
@@ -916,6 +929,12 @@ function parseFlexDate(raw) {
     if (s === 'מחר'  || s === 'tomorrow') {
         const d = new Date(); d.setDate(d.getDate() + 1);
         return d.toISOString().slice(0, 10);
+    }
+
+    // "שישי הקרוב" / "שישי הבא" etc.
+    for (const [name, dayNum] of Object.entries(HEB_DAYS)) {
+        if (s === name + ' הקרוב') return nextWeekdayISO(dayNum, true);
+        if (s === name + ' הבא')   return nextWeekdayISO(dayNum, false);
     }
 
     // split on . / - (space too, for "5 6")
