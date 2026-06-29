@@ -1711,20 +1711,39 @@ async function renderViewingMedia() {
     if (!currentViewing || currentViewing.id !== aptId) return; // user navigated away
     wrap.innerHTML = '';
 
-    const grid = document.createElement('div');
-    grid.className = 'grid grid-cols-3 gap-2';
+    // Explicit capture vs. gallery — `capture` opens the camera directly instead
+    // of dumping the user into the photo library.
+    const actions = document.createElement('div');
+    actions.className = 'grid grid-cols-3 gap-2 mb-2';
+    actions.append(
+        _mediaBtn('fa-camera', 'צלם תמונה', 'image/*',         'environment', aptId),
+        _mediaBtn('fa-video',  'צלם וידאו', 'video/*',         'environment', aptId),
+        _mediaBtn('fa-images', 'מהגלריה',   'image/*,video/*', null,          aptId),
+    );
+    wrap.appendChild(actions);
 
-    const addLabel = document.createElement('label');
-    addLabel.className = 'flex flex-col items-center justify-center aspect-square rounded-lg border-2 border-dashed border-indigo-200 text-indigo-500 cursor-pointer hover:bg-indigo-50';
-    addLabel.innerHTML = '<i class="fa-solid fa-camera text-lg"></i><span class="text-[10px] mt-1">הוסף</span>';
+    if (items.length) {
+        const grid = document.createElement('div');
+        grid.className = 'grid grid-cols-3 gap-2';
+        items.sort((a, b) => a.createdAt - b.createdAt).forEach(it => grid.appendChild(_vMediaThumb(it)));
+        wrap.appendChild(grid);
+    }
+}
+
+function _mediaBtn(icon, label, accept, capture, aptId) {
+    const lbl = document.createElement('label');
+    lbl.className = 'flex flex-col items-center justify-center gap-1 py-3 rounded-lg border-2 border-dashed border-indigo-200 text-indigo-500 cursor-pointer hover:bg-indigo-50 text-[11px] font-medium text-center';
+    lbl.innerHTML = `<i class="fa-solid ${icon} text-base"></i><span></span>`;
+    lbl.querySelector('span').textContent = label;
     const input = document.createElement('input');
-    input.type = 'file'; input.accept = 'image/*,video/*'; input.multiple = true; input.className = 'hidden';
+    input.type = 'file';
+    input.accept = accept;
+    input.className = 'hidden';
+    if (capture) input.setAttribute('capture', capture); // camera; omitted ⇒ library picker
+    else input.multiple = true;
     input.onchange = () => { handleMediaFiles(input.files, aptId); input.value = ''; };
-    addLabel.appendChild(input);
-    grid.appendChild(addLabel);
-
-    items.sort((a, b) => a.createdAt - b.createdAt).forEach(it => grid.appendChild(_vMediaThumb(it)));
-    wrap.appendChild(grid);
+    lbl.appendChild(input);
+    return lbl;
 }
 
 function _vMediaThumb(it) {
