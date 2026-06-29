@@ -961,6 +961,7 @@ function buildApp(fitMap = true) {
                 <div class="font-bold text-sm text-gray-900 truncate group-hover:text-indigo-900">${apt.address}</div>
                 <div class="text-xs text-gray-500 truncate">${apt.details || ''}</div>
                 ${hasNotes ? `<div class="text-[10px] text-amber-600 mt-0.5 truncate"><i class="fa-solid fa-note-sticky mr-0.5"></i>${apt.notes}</div>` : ''}
+                ${_mediaCounts[apt.id] ? `<div class="text-[10px] text-emerald-600 mt-0.5"><i class="fa-solid fa-camera mr-0.5"></i>${_mediaCounts[apt.id]} פריטי מדיה</div>` : ''}
                 ${apt.entryDate ? `<div class="text-[10px] text-sky-600 mt-0.5"><i class="fa-solid fa-key mr-0.5"></i>כניסה: ${formatEntryDate(apt.entryDate)}</div>` : ''}
                 ${apt.visitDate ? `<div class="text-[10px] mt-0.5 ${isToday ? 'text-green-600 font-bold' : 'text-blue-500'}">
                     <i class="fa-solid fa-calendar${isToday?'-check':''} mr-0.5"></i>${isToday ? 'ביקור היום!' : 'ביקור: ' + formatDate(apt.visitDate)}</div>` : ''}
@@ -1231,6 +1232,7 @@ function deleteApartment(id) {
     if (!apt) return;
     if (!confirm(`למחוק את "${apt.address}"?`)) return;
     saveApartments(loadApartments().filter(a => a.id !== id));
+    mediaDeleteByApt(id).then(() => refreshMediaCounts(false));
     buildApp(false);
 }
 
@@ -1337,6 +1339,7 @@ function saveNotes() {
     apts[idx].visitDate  = visitDate;
     apts[idx].updatedAt  = Date.now();
     saveApartments(apts);
+    if (status === 'not-interested') mediaDeleteByApt(currentEditId).then(() => refreshMediaCounts(false));
     closeMainModal();
     buildApp(false);
 }
@@ -1528,6 +1531,260 @@ function renderViewing() {
         tpl.checklist.filter(c => c.section === sec)
             .forEach(c => body.appendChild(_vCheckRow(c.id, c.label)));
     });
+
+    // Media (photos / videos) — device-local, populated async
+    body.appendChild(_vSectionHeader('תמונות וסרטונים', 'fa-camera'));
+    const mediaWrap = document.createElement('div');
+    mediaWrap.id = 'viewing-media';
+    mediaWrap.className = 'pb-4';
+    body.appendChild(mediaWrap);
+    renderViewingMedia();
+}
+
+// ── Media storage (IndexedDB — device-local, NOT synced to the Gist) ───────
+const MEDIA_DB = 'apt-media';
+const MEDIA_STORE = 'media';
+let _mediaDbPromise = null;
+let _mediaCounts = {};
+
+function mediaDB() {
+    if (_mediaDbPromise) return _mediaDbPromise;
+    _mediaDbPromise = new Promise((resolve, reject) => {
+        const req = indexedDB.open(MEDIA_DB, 1);
+        req.onupgradeneeded = () => {
+            const db = req.result;
+            if (!db.objectStoreNames.contains(MEDIA_STORE)) {
+                const store = db.createObjectStore(MEDIA_STORE, { keyPath: 'id', autoIncrement: true });
+                store.createIndex('aptId', 'aptId', { unique: false });
+            }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror  = () => reject(req.error);
+    });
+    return _mediaDbPromise;
+}
+
+// Each op opens its own transaction and issues the request synchronously
+// (no await between tx creation and request — avoids auto-commit races).
+async function mediaAdd(record) {
+    const db = await mediaDB();
+    return new Promise((res, rej) => {
+        const req = db.transaction(MEDIA_STORE, 'readwrite').objectStore(MEDIA_STORE).add(record);
+        req.onsuccess = () => res(req.result);
+        req.onerror  = () => rej(req.error);
+    });
+}
+async function mediaGetByApt(aptId) {
+    const db = await mediaDB();
+    return new Promise((res, rej) => {
+        const req = db.transaction(MEDIA_STORE, 'readonly').objectStore(MEDIA_STORE)
+            .index('aptId').getAll(IDBKeyRange.only(aptId));
+        req.onsuccess = () => res(req.result || []);
+        req.onerror  = () => rej(req.error);
+    });
+}
+async function mediaGetAll() {
+    const db = await mediaDB();
+    return new Promise((res, rej) => {
+        const req = db.transaction(MEDIA_STORE, 'readonly').objectStore(MEDIA_STORE).getAll();
+        req.onsuccess = () => res(req.result || []);
+        req.onerror  = () => rej(req.error);
+    });
+}
+async function mediaDelete(id) {
+    const db = await mediaDB();
+    return new Promise((res, rej) => {
+        const req = db.transaction(MEDIA_STORE, 'readwrite').objectStore(MEDIA_STORE).delete(id);
+        req.onsuccess = () => res();
+        req.onerror  = () => rej(req.error);
+    });
+}
+async function mediaDeleteByApt(aptId) {
+    const items = await mediaGetByApt(aptId).catch(() => []);
+    await Promise.all(items.map(i => mediaDelete(i.id).catch(() => {})));
+}
+
+// Counts per apartment, surfaced as a badge on cards.
+async function refreshMediaCounts(rebuild = true) {
+    try {
+        const all = await mediaGetAll();
+        const counts = {};
+        all.forEach(m => counts[m.aptId] = (counts[m.aptId] || 0) + 1);
+        _mediaCounts = counts;
+    } catch { _mediaCounts = {}; }
+    if (rebuild) buildApp(false);
+}
+
+// Delete media for apartments that are gone or marked not-interested.
+async function cleanupMedia() {
+    try {
+        const all  = await mediaGetAll();
+        const apts = loadApartments();
+        const keep = new Set(apts.filter(a => a.status !== 'not-interested').map(a => a.id));
+        await Promise.all(all.filter(m => !keep.has(m.aptId)).map(m => mediaDelete(m.id).catch(() => {})));
+    } catch {}
+}
+
+// ── Media capture / compression ───────────────────────────────────────────
+async function _loadDrawable(file) {
+    if (window.createImageBitmap) {
+        try { return await createImageBitmap(file, { imageOrientation: 'from-image' }); } catch {}
+        try { return await createImageBitmap(file); } catch {}
+    }
+    return new Promise((res, rej) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload  = () => res(img);
+        img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('image load failed')); };
+        img.src = url;
+    });
+}
+
+function _drawScaled(source, sw, sh, maxDim, quality) {
+    const r = Math.min(maxDim / sw, maxDim / sh, 1);
+    const w = Math.round(sw * r), h = Math.round(sh * r);
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(source, 0, 0, w, h);
+    return canvas;
+}
+
+async function _fileToImageRecord(file, aptId) {
+    const source = await _loadDrawable(file);
+    const sw = source.width || source.naturalWidth;
+    const sh = source.height || source.naturalHeight;
+    const full  = _drawScaled(source, sw, sh, 1280, 0.7);
+    const thumb = _drawScaled(source, sw, sh, 240, 0.6).toDataURL('image/jpeg', 0.6);
+    const blob  = await new Promise(res => full.toBlob(res, 'image/jpeg', 0.7));
+    if (source.close) source.close();
+    if (!blob) throw new Error('compress failed');
+    return { aptId, type: 'image', blob, thumb, createdAt: Date.now(), name: file.name };
+}
+
+function _fileToVideoRecord(file, aptId) {
+    // Videos are stored as-is (no in-browser transcode); we only grab a poster frame.
+    return new Promise(resolve => {
+        const url = URL.createObjectURL(file);
+        const video = document.createElement('video');
+        video.preload = 'metadata'; video.muted = true;
+        let done = false;
+        const finish = thumb => {
+            if (done) return; done = true;
+            URL.revokeObjectURL(url);
+            resolve({ aptId, type: 'video', blob: file, thumb, createdAt: Date.now(), name: file.name });
+        };
+        video.onloadeddata = () => { try { video.currentTime = Math.min(0.1, video.duration || 0.1); } catch { finish(null); } };
+        video.onseeked = () => {
+            try {
+                const c = _drawScaled(video, video.videoWidth, video.videoHeight, 240, 0.6);
+                finish(c.toDataURL('image/jpeg', 0.6));
+            } catch { finish(null); }
+        };
+        video.onerror = () => finish(null);
+        video.src = url;
+    });
+}
+
+async function handleMediaFiles(files, aptId) {
+    if (!files || !files.length) return;
+    for (const file of files) {
+        try {
+            const rec = file.type.startsWith('video')
+                ? await _fileToVideoRecord(file, aptId)
+                : await _fileToImageRecord(file, aptId);
+            await mediaAdd(rec);
+        } catch (e) {
+            console.warn('media add failed', e);
+            if (e && e.name === 'QuotaExceededError') alert('אין מספיק מקום באחסון המכשיר לשמירת המדיה');
+        }
+    }
+    renderViewingMedia();
+    refreshMediaCounts();
+}
+
+// ── Media gallery (inside viewing mode) ───────────────────────────────────
+async function renderViewingMedia() {
+    const wrap = document.getElementById('viewing-media');
+    if (!wrap || !currentViewing) return;
+    const aptId = currentViewing.id;
+    const items = await mediaGetByApt(aptId).catch(() => []);
+    if (!currentViewing || currentViewing.id !== aptId) return; // user navigated away
+    wrap.innerHTML = '';
+
+    const grid = document.createElement('div');
+    grid.className = 'grid grid-cols-3 gap-2';
+
+    const addLabel = document.createElement('label');
+    addLabel.className = 'flex flex-col items-center justify-center aspect-square rounded-lg border-2 border-dashed border-indigo-200 text-indigo-500 cursor-pointer hover:bg-indigo-50';
+    addLabel.innerHTML = '<i class="fa-solid fa-camera text-lg"></i><span class="text-[10px] mt-1">הוסף</span>';
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = 'image/*,video/*'; input.multiple = true; input.className = 'hidden';
+    input.onchange = () => { handleMediaFiles(input.files, aptId); input.value = ''; };
+    addLabel.appendChild(input);
+    grid.appendChild(addLabel);
+
+    items.sort((a, b) => a.createdAt - b.createdAt).forEach(it => grid.appendChild(_vMediaThumb(it)));
+    wrap.appendChild(grid);
+}
+
+function _vMediaThumb(it) {
+    const cell = document.createElement('div');
+    cell.className = 'relative aspect-square rounded-lg overflow-hidden bg-gray-200';
+    if (it.thumb) {
+        const img = document.createElement('img');
+        img.className = 'w-full h-full object-cover';
+        img.src = it.thumb;
+        cell.appendChild(img);
+    } else {
+        cell.innerHTML = '<div class="w-full h-full flex items-center justify-center text-gray-400"><i class="fa-solid fa-film text-xl"></i></div>';
+    }
+    if (it.type === 'video') {
+        const play = document.createElement('div');
+        play.className = 'absolute inset-0 flex items-center justify-center pointer-events-none';
+        play.innerHTML = '<i class="fa-solid fa-circle-play text-white text-2xl" style="text-shadow:0 1px 3px rgba(0,0,0,.6);"></i>';
+        cell.appendChild(play);
+    }
+    cell.onclick = () => openMediaLightbox(it);
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'absolute top-1 left-1 w-6 h-6 rounded-full bg-black/50 text-white flex items-center justify-center';
+    del.innerHTML = '<i class="fa-solid fa-xmark" style="font-size:11px;"></i>';
+    del.onclick = e => { e.stopPropagation(); deleteMedia(it.id); };
+    cell.appendChild(del);
+    return cell;
+}
+
+async function deleteMedia(id) {
+    await mediaDelete(id).catch(() => {});
+    renderViewingMedia();
+    refreshMediaCounts();
+}
+
+function openMediaLightbox(it) {
+    const url = URL.createObjectURL(it.blob);
+    const overlay = document.createElement('div');
+    overlay.className = 'flex items-center justify-center p-4';
+    Object.assign(overlay.style, {
+        position: 'fixed', inset: '0', zIndex: '80', background: 'rgba(0,0,0,.9)',
+    });
+    const cleanup = () => { overlay.remove(); URL.revokeObjectURL(url); };
+    overlay.onclick = cleanup;
+    let media;
+    if (it.type === 'video') {
+        media = document.createElement('video');
+        media.src = url; media.controls = true; media.autoplay = true; media.playsInline = true;
+    } else {
+        media = document.createElement('img');
+        media.src = url;
+    }
+    media.className = 'max-w-full max-h-full rounded';
+    media.onclick = e => e.stopPropagation();
+    const close = document.createElement('button');
+    close.className = 'absolute top-4 left-4 text-white text-3xl';
+    close.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+    close.onclick = cleanup;
+    overlay.append(media, close);
+    document.body.appendChild(overlay);
 }
 
 // ── Import modal ──────────────────────────────────────────────────────────
@@ -1923,6 +2180,9 @@ function closeSyncModal() { document.getElementById('modal-sync').classList.add(
     showOnboarding();
     // For users who already dismissed onboarding, prompt for workplace if not set
     if (localStorage.getItem(ONBOARDING_KEY) && !loadWorkplace()) openWorkplaceModal();
+
+    // Reclaim media for deleted / not-interested apartments, then load counts for cards
+    cleanupMedia().then(() => refreshMediaCounts());
 
     // Re-pull on tab focus (other device may have written)
     document.addEventListener('visibilitychange', () => {
