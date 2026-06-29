@@ -8,6 +8,7 @@ A Hebrew/RTL single-page web app for tracking apartment search progress. Built w
 - **Sidebar list** — sortable by price, distance, or entry date; filterable by city, status, price range, and more
 - **Status tracking** — 6 statuses: מעוניין → מועדף → פניתי → נקבע ביקור → ביקרתי → לא מתאים; auto-advances to "scheduled" when a visit date is set
 - **Notes & editing** — tabbed modal per apartment (עריכה / הערות)
+- **Viewing mode** — full-screen checklist for use while touring an apartment: pre-set questions to ask, field-inspection items to tick off, and ad-hoc per-apartment questions; the question template is customizable per user via the Gist
 - **AI import** — paste the `import-prompt.md` into any AI (Claude, ChatGPT, Gemini) with apartment listings; import the returned JSON directly
 - **GitHub Gist sync** — store data in a private Gist and scan a QR code on another device to share state across desktop and mobile
 - **Per-apartment conflict resolution** — each mutation is timestamped; on sync the newer version of each apartment wins

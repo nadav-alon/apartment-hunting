@@ -19,11 +19,15 @@ const GIST_DESC      = 'apartment-hunting-sync';
 {
   "v": 2,
   "apartments": [ /* apartment objects */ ],
-  "workplace": { "name": "...", "address": "...", "coords": [lat, lon] }
+  "workplace": { "name": "...", "address": "...", "coords": [lat, lon] },
+  "viewingTemplate": {
+    "questions": [ { "id": "...", "section": "...", "label": "..." } ],
+    "checklist": [ { "id": "...", "section": "...", "label": "..." } ]
+  }
 }
 ```
 
-`gistRead()` returns `{ apartments, workplace }` with backward compat for v1 (plain array → `workplace: null`). When `workplace` is null in the remote, `gistPushAll()` is called immediately to upgrade the Gist to v2.
+`gistRead()` returns `{ apartments, workplace, viewingTemplate }` with backward compat for v1 (plain array → both null). When `workplace` or `viewingTemplate` is missing in the remote, `gistPushAll()` is called immediately to upgrade the Gist (the local defaults — `DEFAULT_TEMPLATE`, etc. — get written up). Users customize their template by editing the `viewingTemplate` field directly in the Gist.
 
 ## Apartment object shape
 
@@ -38,7 +42,13 @@ const GIST_DESC      = 'apartment-hunting-sync';
   dateAdded: "2025-01-01",
   updatedAt: 1700000000000,// Date.now() on every mutation — used for merge
   // optional:
-  neighborhood, details, link, contact, entryDate, visitDate, notes
+  neighborhood, details, link, contact, entryDate, visitDate, notes,
+  viewing: {               // viewing-mode data (synced via Gist)
+    answers: { [questionId]: "..." },   // global template question answers
+    checklist: { [checklistId]: true }, // ticked field-inspection items
+    extra: [ { label, answer } ],       // per-apartment ad-hoc questions
+    doneAt: 1700000000000               // set when "סיים ביקור" pressed
+  }
 }
 ```
 
@@ -86,6 +96,11 @@ function makeIcon(bg, faClass, size, pulse) {
 | `updateWorkplaceDisplay()` | Refresh sidebar bar + map marker from `loadWorkplace()` |
 | `openWorkplaceModal()` | Show the workplace setup/edit modal |
 | `showOnboarding()` | Show onboarding if `ONBOARDING_KEY` not set |
+| `loadTemplate()` | Viewing template from localStorage; falls back to `DEFAULT_TEMPLATE` |
+| `openViewing(id)` | Open full-screen viewing mode for an apartment |
+| `persistViewing(immediate?)` | Save viewing draft to localStorage; debounced (2.5s) Gist push unless `immediate` |
+| `finishViewing()` | "סיים ביקור" — stamp `doneAt`, auto-advance status to `visited`, push |
+| `aptHasViewing(apt)` | True if the apartment has any viewing answers/checks/extras |
 | `calcDist(c1, c2)` | Haversine × 1.4 road factor; returns `{ km, mins }` |
 | `parseFlexDate(str)` | Parses Hebrew date strings incl. שישי הקרוב/הבא |
 
@@ -106,6 +121,16 @@ function makeIcon(bg, faClass, size, pulse) {
 - `שישי הבא` — strictly next occurrence (excludes today)
 
 `HEB_DAYS = { ראשון:0, שני:1, שלישי:2, רביעי:3, חמישי:4, שישי:5, שבת:6 }`
+
+## Viewing mode
+
+Full-screen overlay (`#viewing-mode`, `z-[70]`, opaque) for use while physically visiting an apartment. Not a centered modal — fills the viewport for one-handed mobile use.
+
+- **Entry points:** clipboard icon on each apartment card (emerald when `aptHasViewing` is true), and a "מצב ביקור" button at the top of the notes tab.
+- **Three sections:** template questions (label + textarea, grouped by `section`), per-apartment extra questions (editable label + answer + delete), and a tap-to-tick field checklist.
+- **Persistence:** every input writes localStorage immediately with a fresh `updatedAt` (so a mid-visit `syncFromGist` keeps local via the merge), and schedules a debounced (2.5s) Gist push. "חזרה" pushes immediately; "סיים ביקור" pushes and advances status to `visited`.
+- **Template:** global default (`DEFAULT_TEMPLATE`) synced into the Gist as `viewingTemplate`; per-user customization is done by editing that Gist field. Per-apartment extras live on `apt.viewing.extra`.
+- Phase 2 (not yet built): photo capture → IndexedDB (device-only, never in Gist) → per-apartment thumbnail gallery, auto-deleted on `not-interested` or after a week.
 
 ## Mobile layout
 
