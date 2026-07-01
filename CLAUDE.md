@@ -67,6 +67,10 @@ const BEFORE_SCHEDULED = new Set(['interested','favorite','contacted']);
 
 Setting a `visitDate` on an apartment whose status is in `BEFORE_SCHEDULED` auto-advances it to `"scheduled"`.
 
+## Sorting
+
+`currentSort` ∈ `'price' | 'distance' | 'entryDate' | 'visitDate'`; `setSort(field)` swaps the active pill via `SORT_BTN_ID` and re-runs `buildApp`. The comparator lives inline in `buildApp`'s `.sort()`. `visitDate` order: upcoming/today ascending (soonest first) → past descending (most-recent first) → undated last (dates are ISO `YYYY-MM-DD`, so string compare is chronological; `todayStr` is the pivot).
+
 ## Leaflet + Tailwind CDN JIT gotcha
 
 Leaflet creates DOM nodes dynamically — Tailwind JIT never scans them. **Never use Tailwind classes inside `L.divIcon` HTML.** Use explicit inline styles for all icon sizes, colors, and layout.
@@ -132,7 +136,8 @@ Full-screen overlay (`#viewing-mode`, `z-[70]`, opaque) for use while physically
 
 - **Entry points:** clipboard icon on each apartment card (emerald when `aptHasViewing` is true), and a "מצב ביקור" button at the top of the notes tab.
 - **Three sections:** template questions (label + textarea, grouped by `section`), per-apartment extra questions (editable label + answer + delete), and a tap-to-tick field checklist.
-- **Cost fields:** questions with `type: 'cost'` render via `_vCostRow` (numeric ₪ input). After the section that contains them, `buildCostSummary()` renders a live breakdown box (`#viewing-cost-summary`): base rent + each cost = total monthly. `updateCostSummary()` rebuilds it on every keystroke. Base rent comes from `currentViewing.price` (stashed in `openViewing`).
+- **Cost fields:** questions with `type: 'cost'` render via `_vCostRow` (a **text** input, not `number`, so pasted `1,250`/`₪` are accepted — stripped to digits on input). After the section that contains them, `buildCostSummary()` renders a live breakdown box (`#viewing-cost-summary`): base rent + each cost = total monthly. `updateCostSummary()` rebuilds it on every keystroke. Base rent comes from `currentViewing.price` (stashed in `openViewing`).
+- **Export/share:** the share icon in the viewing header opens `#export-modal` (`openExportConfig`) — a photo picker over this apartment's IndexedDB media (`_exportSelected` holds chosen ids). `generateExport()` builds an inline-styled RTL card (`_buildExportCard`: status-colored header, price breakdown, answered questions, extra Q&A, ticked checklist, selected photo thumbs), rasterizes it with **html2canvas** (CDN), and shares the PNG via `navigator.share({files})` with a download fallback. **Card uses inline styles only** (same Tailwind-JIT gotcha as Leaflet — the node is built dynamically).
 - **Persistence:** every input writes localStorage immediately with a fresh `updatedAt` (so a mid-visit `syncFromGist` keeps local via the merge), and schedules a debounced (2.5s) Gist push. "חזרה" pushes immediately; "סיים ביקור" pushes and advances status to `visited`.
 - **Template:** global default (`DEFAULT_TEMPLATE`) synced into the Gist as `viewingTemplate`; per-user customization is done by editing that Gist field. Per-apartment extras live on `apt.viewing.extra`.
 - **Photos/videos:** captured/picked via `<input accept="image/*,video/*">`, shown as a 3-col thumbnail grid with a tap-to-open lightbox. See Media storage below.

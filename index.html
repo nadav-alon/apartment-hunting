@@ -9,6 +9,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;700&display=swap');
         body { font-family: 'Rubik', sans-serif; }
@@ -137,6 +138,7 @@
                 <button onclick="setSort('price')"     id="sort-price" class="sort-btn text-[11px] py-0.5 px-2 rounded-lg border transition bg-indigo-600 text-white border-indigo-600">מחיר</button>
                 <button onclick="setSort('distance')"  id="sort-dist"  class="sort-btn text-[11px] py-0.5 px-2 rounded-lg border transition bg-white text-gray-600 border-gray-200 hover:bg-gray-100">מרחק</button>
                 <button onclick="setSort('entryDate')" id="sort-entry" class="sort-btn text-[11px] py-0.5 px-2 rounded-lg border transition bg-white text-gray-600 border-gray-200 hover:bg-gray-100">כניסה</button>
+                <button onclick="setSort('visitDate')" id="sort-visit" class="sort-btn text-[11px] py-0.5 px-2 rounded-lg border transition bg-white text-gray-600 border-gray-200 hover:bg-gray-100">ביקור</button>
             </div>
             <!-- Transit -->
             <div class="flex items-center gap-2">
@@ -336,11 +338,37 @@
       <div id="viewing-title" class="font-bold text-sm truncate"></div>
       <div class="text-[10px] text-indigo-300">מצב ביקור</div>
     </div>
-    <button onclick="finishViewing()" class="bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex-shrink-0">
-      <i class="fa-solid fa-check ml-1"></i>סיים ביקור
-    </button>
+    <div class="flex items-center gap-1.5 flex-shrink-0">
+      <button onclick="openExportConfig()" title="ייצוא לשיתוף" class="text-indigo-100 hover:text-white bg-indigo-700/60 hover:bg-indigo-700 w-8 h-8 rounded-lg flex items-center justify-center">
+        <i class="fa-solid fa-share-nodes"></i>
+      </button>
+      <button onclick="finishViewing()" class="bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg">
+        <i class="fa-solid fa-check ml-1"></i>סיים ביקור
+      </button>
+    </div>
   </header>
   <div id="viewing-body" class="overflow-y-auto flex-1 p-3 space-y-1"></div>
+</div>
+
+<!-- ── Export (share) config ──────────────────────────────────────────────── -->
+<div id="export-modal" class="hidden fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4" onclick="if(event.target===this)closeExportConfig()">
+  <div class="bg-white rounded-xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh]" dir="rtl">
+    <div class="p-4 bg-indigo-900 text-white rounded-t-xl flex items-center justify-between flex-shrink-0">
+      <h2 class="font-bold text-sm"><i class="fa-solid fa-share-nodes ml-1.5"></i>ייצוא לשיתוף</h2>
+      <button onclick="closeExportConfig()" class="text-indigo-200 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="p-4 overflow-y-auto">
+      <div id="export-photo-section">
+        <div class="text-xs font-bold text-gray-500 mb-2">בחר תמונות לצירוף</div>
+        <div id="export-photo-grid" class="grid grid-cols-4 gap-2"></div>
+      </div>
+    </div>
+    <div class="p-4 border-t flex-shrink-0">
+      <button id="export-generate-btn" onclick="generateExport()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-lg text-sm">
+        <i class="fa-solid fa-image ml-1.5"></i>צור ושתף
+      </button>
+    </div>
+  </div>
 </div>
 
 <!-- ── Import Modal ───────────────────────────────────────────────────────── -->
@@ -746,16 +774,16 @@ function onEntryDateInput(val) {
     onAptDateInput('f-entry-date-text', 'f-entry-date', 'f-entry-date-preview', val);
 }
 
-let currentSort = 'price'; // 'price' | 'distance' | 'entryDate'
+let currentSort = 'price'; // 'price' | 'distance' | 'entryDate' | 'visitDate'
+
+const SORT_BTN_ID = { price: 'sort-price', distance: 'sort-dist', entryDate: 'sort-entry', visitDate: 'sort-visit' };
 
 function setSort(field) {
     currentSort = field;
     document.querySelectorAll('.sort-btn').forEach(b => {
         Object.assign(b.style, { background:'white', color:'#4b5563', borderColor:'#e5e7eb' });
     });
-    const active = document.getElementById(
-        field === 'price' ? 'sort-price' : field === 'distance' ? 'sort-dist' : 'sort-entry'
-    );
+    const active = document.getElementById(SORT_BTN_ID[field] || 'sort-price');
     Object.assign(active.style, { background:'#4f46e5', color:'white', borderColor:'#4f46e5' });
     buildApp(false);
 }
@@ -905,6 +933,15 @@ function buildApp(fitMap = true) {
             const ra = rank(a.entryDate), rb = rank(b.entryDate);
             if (ra !== rb) return ra - rb;
             if (ra === 1) return a.entryDate.localeCompare(b.entryDate);
+            return 0;
+        }
+        if (currentSort === 'visitDate') {
+            // upcoming/today first (soonest → furthest), then past (most-recent → oldest), undated last
+            const rank = v => !v ? 2 : (v >= todayStr ? 0 : 1);
+            const ra = rank(a.visitDate), rb = rank(b.visitDate);
+            if (ra !== rb) return ra - rb;
+            if (ra === 0) return a.visitDate.localeCompare(b.visitDate); // upcoming ascending
+            if (ra === 1) return b.visitDate.localeCompare(a.visitDate); // past descending
             return 0;
         }
         return a.price - b.price;
@@ -1436,6 +1473,174 @@ function _closeViewingOverlay() {
     currentViewing = null;
 }
 
+// ── Export viewing summary as a shareable image ────────────────────────────
+let _exportPhotos = [];             // media records available for the current apt
+let _exportSelected = new Set();    // media ids picked for inclusion
+
+async function openExportConfig() {
+    if (!currentViewing) return;
+    _exportSelected = new Set();
+    const grid = document.getElementById('export-photo-grid');
+    const section = document.getElementById('export-photo-section');
+    grid.innerHTML = '';
+    _exportPhotos = (await mediaGetByApt(currentViewing.id).catch(() => []))
+        .filter(p => p.thumb).sort((a, b) => a.createdAt - b.createdAt);
+    section.classList.toggle('hidden', _exportPhotos.length === 0);
+    _exportPhotos.forEach(p => grid.appendChild(_exportThumb(p)));
+    document.getElementById('export-modal').classList.remove('hidden');
+}
+
+function _exportThumb(p) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'relative aspect-square rounded-lg overflow-hidden border-2';
+    btn.style.borderColor = 'transparent';
+    const img = document.createElement('img');
+    img.src = p.thumb;
+    img.className = 'w-full h-full object-cover';
+    const check = document.createElement('span');
+    check.className = 'absolute inset-0 items-center justify-center bg-indigo-600/40';
+    check.style.display = 'none';
+    check.innerHTML = '<i class="fa-solid fa-check text-white"></i>';
+    btn.append(img, check);
+    if (p.type === 'video') {
+        const play = document.createElement('span');
+        play.className = 'absolute bottom-0.5 right-0.5 text-white text-[9px]';
+        play.innerHTML = '<i class="fa-solid fa-play"></i>';
+        btn.appendChild(play);
+    }
+    btn.onclick = () => {
+        const on = !_exportSelected.has(p.id);
+        if (on) _exportSelected.add(p.id); else _exportSelected.delete(p.id);
+        btn.style.borderColor = on ? '#4f46e5' : 'transparent';
+        check.style.display = on ? 'flex' : 'none';
+    };
+    return btn;
+}
+
+function closeExportConfig() {
+    document.getElementById('export-modal').classList.add('hidden');
+}
+
+async function generateExport() {
+    if (!currentViewing) return;
+    const btn = document.getElementById('export-generate-btn');
+    const orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin ml-1.5"></i>מכין תמונה...';
+    const card = _buildExportCard();
+    document.body.appendChild(card);
+    try {
+        await _awaitImages(card);
+        const canvas = await html2canvas(card, { backgroundColor: '#ffffff', scale: 2, useCORS: true });
+        await _shareCanvas(canvas);
+        closeExportConfig();
+    } catch (e) {
+        console.warn('export failed', e);
+        alert('יצירת התמונה נכשלה');
+    } finally {
+        card.remove();
+        btn.disabled = false;
+        btn.innerHTML = orig;
+    }
+}
+
+// Inline styles only (Tailwind JIT never scans this dynamically-built node).
+function _buildExportCard() {
+    const apt   = loadApartments().find(a => a.id === currentViewing.id) || {};
+    const d     = currentViewing.data;
+    const tpl   = loadTemplate();
+    const sc    = STATUSES.find(s => s.value === apt.status) || STATUSES[0];
+    const base  = Number(currentViewing.price) || 0;
+    const costs = tpl.questions.filter(q => q.type === 'cost');
+    const esc   = s => (s == null ? '' : String(s).replace(/[&<>]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[c])));
+    let total = base;
+    costs.forEach(c => total += Number(d.answers[c.id]) || 0);
+
+    // Price breakdown rows
+    const priceRows = [`<div style="display:flex;justify-content:space-between;font-size:13px;color:#374151;margin-bottom:4px;"><span>שכירות</span><span>${base.toLocaleString()} ₪</span></div>`];
+    costs.forEach(c => {
+        const amt = Number(d.answers[c.id]) || 0;
+        if (amt > 0) priceRows.push(`<div style="display:flex;justify-content:space-between;font-size:13px;color:#374151;margin-bottom:4px;"><span>+ ${esc(c.label)}</span><span>${amt.toLocaleString()} ₪</span></div>`);
+    });
+    priceRows.push(`<div style="display:flex;justify-content:space-between;font-size:15px;font-weight:700;color:#312e81;border-top:1px solid #c7d2fe;padding-top:6px;margin-top:2px;"><span>סה״כ חודשי</span><span>${total.toLocaleString()} ₪</span></div>`);
+
+    const body = [`<div style="background:#eef2ff;border:1px solid #e0e7ff;border-radius:10px;padding:12px;margin-bottom:12px;">${priceRows.join('')}</div>`];
+
+    // Answered questions (skip cost + empty), grouped by section
+    [...new Set(tpl.questions.filter(q => q.type !== 'cost').map(q => q.section))].forEach(sec => {
+        const qs = tpl.questions.filter(q => q.section === sec && q.type !== 'cost' && (d.answers[q.id] || '').trim());
+        if (!qs.length) return;
+        body.push(`<div style="font-size:12px;font-weight:700;color:#4338ca;margin:12px 0 4px;">${esc(sec)}</div>`);
+        qs.forEach(q => body.push(`<div style="margin-bottom:7px;"><div style="font-size:11px;color:#6b7280;">${esc(q.label)}</div><div style="font-size:13px;color:#111827;white-space:pre-wrap;">${esc(d.answers[q.id])}</div></div>`));
+    });
+
+    // Per-apartment extra Q&A
+    const extras = (d.extra || []).filter(e => (e.label && e.label.trim()) || (e.answer && e.answer.trim()));
+    if (extras.length) {
+        body.push(`<div style="font-size:12px;font-weight:700;color:#4338ca;margin:12px 0 4px;">שאלות נוספות</div>`);
+        extras.forEach(e => body.push(`<div style="margin-bottom:7px;"><div style="font-size:11px;color:#6b7280;">${esc(e.label)}</div><div style="font-size:13px;color:#111827;white-space:pre-wrap;">${esc(e.answer)}</div></div>`));
+    }
+
+    // Ticked field checklist
+    const ticked = tpl.checklist.filter(c => d.checklist[c.id]);
+    if (ticked.length) {
+        body.push(`<div style="font-size:12px;font-weight:700;color:#4338ca;margin:12px 0 4px;">נבדק בשטח</div>`);
+        ticked.forEach(c => body.push(`<div style="display:flex;gap:6px;align-items:flex-start;font-size:13px;color:#065f46;margin-bottom:4px;"><span style="color:#059669;font-weight:700;">✓</span><span>${esc(c.label)}</span></div>`));
+    }
+
+    // Selected photos
+    const photos = _exportPhotos.filter(p => _exportSelected.has(p.id));
+    if (photos.length) {
+        body.push(`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:14px;">`
+            + photos.map(p => `<img src="${p.thumb}" style="width:100%;height:88px;object-fit:cover;border-radius:8px;display:block;" />`).join('')
+            + `</div>`);
+    }
+
+    body.push(`<div style="font-size:10px;color:#9ca3af;margin-top:16px;text-align:center;">נוצר ב-${new Date().toLocaleDateString('he-IL')} · מפת דירות</div>`);
+
+    const wrap = document.createElement('div');
+    Object.assign(wrap.style, {
+        position: 'absolute', top: '0', left: '-9999px', width: '380px',
+        background: '#ffffff', direction: 'rtl', fontFamily: 'Rubik, sans-serif',
+        color: '#1f2937', boxSizing: 'border-box'
+    });
+    wrap.innerHTML =
+        `<div style="background:${sc.bg};color:#fff;padding:16px;">
+            <div style="display:inline-block;background:rgba(255,255,255,.22);font-size:11px;font-weight:700;padding:2px 10px;border-radius:999px;margin-bottom:8px;">${esc(sc.label)}</div>
+            <div style="font-size:20px;font-weight:700;line-height:1.2;">${esc(apt.address)}</div>
+            <div style="font-size:12px;opacity:.9;margin-top:3px;">${esc(apt.city)}${apt.neighborhood ? ' · ' + esc(apt.neighborhood) : ''}</div>
+        </div>
+        <div style="padding:16px;">${body.join('')}</div>`;
+    return wrap;
+}
+
+function _awaitImages(root) {
+    return Promise.all([...root.querySelectorAll('img')].map(img =>
+        img.complete ? Promise.resolve() : new Promise(res => { img.onload = img.onerror = res; })));
+}
+
+function _shareCanvas(canvas) {
+    return new Promise(resolve => {
+        canvas.toBlob(async (blob) => {
+            if (!blob) return resolve();
+            const apt = loadApartments().find(a => a.id === currentViewing.id) || {};
+            const fname = `${(apt.address || 'apartment').replace(/[^\w֐-׿]+/g, '_')}.png`;
+            const file = new File([blob], fname, { type: 'image/png' });
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                try { await navigator.share({ files: [file], title: apt.address || 'דירה' }); } catch {}
+            } else {
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = fname;
+                a.click();
+                setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+            }
+            resolve();
+        }, 'image/png');
+    });
+}
+
 function _vSectionHeader(text, icon) {
     const h = document.createElement('div');
     h.className = 'flex items-center gap-2 text-indigo-800 font-bold text-sm mt-4 mb-1.5 first:mt-0';
@@ -1482,9 +1687,10 @@ function _vCostRow(id, label, val) {
     plus.className = 'text-indigo-400 text-sm font-bold';
     plus.textContent = '+';
     const inp = document.createElement('input');
-    inp.type = 'number';
+    // Text (not number) input so pasted values with commas/₪ are accepted; we strip
+    // to digits on the way in so the stored answer stays a clean number for the total.
+    inp.type = 'text';
     inp.inputMode = 'numeric';
-    inp.min = '0';
     inp.className = 'w-20 border rounded-lg px-2 py-1.5 text-sm text-left focus:outline-none focus:ring-2 focus:ring-indigo-300';
     inp.placeholder = '0';
     inp.value = val;
@@ -1492,7 +1698,9 @@ function _vCostRow(id, label, val) {
     unit.className = 'text-gray-400 text-sm';
     unit.textContent = '₪';
     inp.addEventListener('input', () => {
-        currentViewing.data.answers[id] = inp.value;
+        const digits = inp.value.replace(/\D/g, '');
+        if (inp.value !== digits) inp.value = digits; // drop commas/spaces/₪ live
+        currentViewing.data.answers[id] = digits;
         persistViewing();
         updateCostSummary();
     });
