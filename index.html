@@ -44,6 +44,10 @@
                         class="hidden md:flex w-8 h-8 rounded-lg bg-white/20 hover:bg-white/30 items-center justify-center transition">
                     <i class="fa-solid fa-file-import text-sm"></i>
                 </button>
+                <button onclick="openYad2Modal()" title="ייבוא מ-yad2"
+                        class="hidden md:flex w-8 h-8 rounded-lg bg-white/20 hover:bg-white/30 items-center justify-center transition">
+                    <i class="fa-solid fa-download text-sm"></i>
+                </button>
                 <button onclick="exportData()" title="ייצוא JSON"
                         class="hidden md:flex w-8 h-8 rounded-lg bg-white/20 hover:bg-white/30 items-center justify-center transition">
                     <i class="fa-solid fa-file-export text-sm"></i>
@@ -62,6 +66,9 @@
                     <div id="overflow-menu" class="hidden absolute left-0 top-full mt-1 bg-white rounded-xl shadow-xl py-1 z-50" style="min-width:140px;" dir="rtl">
                         <button onclick="openImportModal();closeOverflow()" class="w-full text-right px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
                             <i class="fa-solid fa-file-import text-gray-400" style="width:16px;"></i> ייבוא
+                        </button>
+                        <button onclick="openYad2Modal();closeOverflow()" class="w-full text-right px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                            <i class="fa-solid fa-download text-gray-400" style="width:16px;"></i> ייבוא מ-yad2
                         </button>
                         <button onclick="exportData();closeOverflow()" class="w-full text-right px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
                             <i class="fa-solid fa-file-export text-gray-400" style="width:16px;"></i> ייצוא
@@ -109,11 +116,15 @@
             <div class="flex gap-1 flex-wrap" id="status-filter-btns"></div>
         </div>
 
-        <!-- Visiting today (always visible) -->
-        <div>
+        <!-- Visiting today / auto-generated (always visible) -->
+        <div class="flex gap-1.5 flex-wrap">
             <button onclick="toggleVisitingToday()" id="btn-visiting-today"
                     class="text-[11px] font-medium py-1 px-2.5 rounded-lg border transition flex items-center gap-1 bg-white text-gray-600 border-gray-200 hover:bg-gray-100">
                 <i class="fa-solid fa-calendar-day" style="font-size:10px;"></i> ביקור היום
+            </button>
+            <button onclick="toggleAutoGen()" id="btn-autogen"
+                    class="hidden text-[11px] font-medium py-1 px-2.5 rounded-lg border transition items-center gap-1 bg-white text-gray-600 border-gray-200 hover:bg-gray-100">
+                <i class="fa-solid fa-robot" style="font-size:10px;"></i> נוצר אוטומטית
             </button>
         </div>
 
@@ -367,6 +378,36 @@
       <button id="export-generate-btn" onclick="generateExport()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-lg text-sm">
         <i class="fa-solid fa-image ml-1.5"></i>צור ושתף
       </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Yad2 Import Modal ──────────────────────────────────────────────────── -->
+<div id="modal-yad2" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onclick="if(event.target===this)closeYad2Modal()">
+  <div class="bg-white rounded-xl shadow-2xl w-full max-w-md" dir="rtl">
+    <div class="p-4 bg-indigo-900 text-white rounded-t-xl flex items-center justify-between">
+      <h2 class="font-bold text-sm"><i class="fa-solid fa-download ml-1.5"></i>ייבוא מ-yad2</h2>
+      <button onclick="closeYad2Modal()" class="text-indigo-200 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+    </div>
+    <div class="p-4 space-y-3">
+      <p class="text-xs text-gray-500 leading-relaxed">
+        הרץ במחשב: <code class="bg-gray-100 px-1 rounded text-[11px]" dir="ltr">node import-yad2.js &lt;url&gt;</code><br>
+        הכלי מעתיק את הדירה ללוח. כאן לחץ "קרא מהלוח" כדי להוסיף אותה (מתויגת "נוצר אוטומטית" להשלמה).
+      </p>
+      <button onclick="readYad2Clipboard()"
+              class="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-medium hover:bg-indigo-700 transition text-sm">
+        <i class="fa-solid fa-clipboard ml-1.5"></i>קרא מהלוח
+      </button>
+      <div class="text-xs text-gray-400 text-center">— או הדבק ידנית —</div>
+      <textarea id="yad2-text" rows="4" placeholder='{"address":"...", "city":"...", "price":5000, ...}'
+                class="w-full border rounded-lg px-3 py-2 text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400" dir="ltr"></textarea>
+      <div id="yad2-status" class="text-xs hidden"></div>
+      <div class="flex gap-2">
+        <button onclick="importYad2FromText()"
+                class="flex-1 bg-indigo-600 text-white py-2 rounded-lg font-medium hover:bg-indigo-700 transition text-sm">ייבא</button>
+        <button onclick="closeYad2Modal()"
+                class="px-3 bg-gray-100 text-gray-700 py-2 rounded-lg font-medium hover:bg-gray-200 transition text-sm">סגור</button>
+      </div>
     </div>
   </div>
 </div>
@@ -737,8 +778,8 @@ function updateWorkplaceMarker() {
     if (!wp) return;
     workplaceMarker = L.marker(wp.coords, { icon: workplaceIcon })
         .bindPopup(`<div style="text-align:right;font-family:Rubik,sans-serif;padding:4px;">
-            <strong style="color:#dc2626;">מקום עבודה: ${wp.name}</strong><br>
-            <span style="font-size:11px;color:#6b7280;">${wp.address}</span></div>`)
+            <strong style="color:#dc2626;">מקום עבודה: ${esc(wp.name)}</strong><br>
+            <span style="font-size:11px;color:#6b7280;">${esc(wp.address)}</span></div>`)
         .addTo(map);
 }
 updateWorkplaceMarker();
@@ -749,9 +790,22 @@ let searchQuery        = '';
 let selectedStatuses   = new Set(); // empty = show all statuses
 let excludedStatuses   = new Set(); // always excluded regardless of selectedStatuses
 let visitingTodayOnly  = false;
+let autoGenOnly        = false;     // show only auto-generated (yad2-imported) apartments
 
 function today() { return new Date().toISOString().slice(0, 10); }
 function formatDate(d) { if (!d) return ''; const [y,m,dd]=d.split('-'); return `${dd}.${m}.${y}`; }
+
+// Escape untrusted text (apartment/workplace fields — some arrive via import) before
+// it goes into an innerHTML/template string, to prevent stored XSS. Covers quotes too
+// so it's safe inside HTML attributes.
+function esc(s) {
+    return s == null ? '' : String(s).replace(/[&<>"']/g, c =>
+        ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
+// Allow only http(s) URLs in href/src (blocks javascript:, data:, etc.).
+function safeUrl(u) {
+    return typeof u === 'string' && /^https?:\/\//i.test(u.trim()) ? u.trim() : '#';
+}
 
 const ENTRY_SPECIAL = { 'בהקדם':'asap', 'asap':'asap', 'גמיש':'flexible', 'גמישות':'flexible', 'flexible':'flexible' };
 function formatEntryDate(v) {
@@ -814,6 +868,26 @@ function toggleVisitingToday() {
     Object.assign(btn.style, visitingTodayOnly
         ? { background:'#059669', color:'white', borderColor:'#059669' }
         : { background:'white',   color:'#4b5563', borderColor:'#e5e7eb' });
+    buildApp(false);
+}
+
+function toggleAutoGen() {
+    autoGenOnly = !autoGenOnly;
+    const btn = document.getElementById('btn-autogen');
+    Object.assign(btn.style, autoGenOnly
+        ? { background:'#d97706', color:'white', borderColor:'#d97706' }
+        : { background:'white',   color:'#4b5563', borderColor:'#e5e7eb' });
+    buildApp(false);
+}
+
+// Remove the 'auto-generated' tag once the user has reviewed/completed the apartment.
+function dismissAutoGen(id) {
+    const apts = loadApartments();
+    const apt  = apts.find(a => a.id === id);
+    if (!apt) return;
+    delete apt.autoGenerated;
+    apt.updatedAt = Date.now();
+    saveApartments(apts);
     buildApp(false);
 }
 
@@ -910,12 +984,20 @@ function buildApp(fitMap = true) {
     listEl.innerHTML = '';
     const todayStr = today();
 
+    // Auto-generated filter is only offered when such apartments exist.
+    const hasAutoGen = apts.some(a => a.autoGenerated);
+    const autoBtn = document.getElementById('btn-autogen');
+    if (!hasAutoGen && autoGenOnly) toggleAutoGen();
+    autoBtn.classList.toggle('hidden', !hasAutoGen);
+    autoBtn.classList.toggle('flex', hasAutoGen);
+
     const visible = apts.filter(a => {
         if (currentCityFilter !== 'all' && a.city !== currentCityFilter) return false;
         if (currentMaxPrice !== Infinity && a.price > currentMaxPrice) return false;
         if (selectedStatuses.size > 0 && !selectedStatuses.has(a.status)) return false;
         if (excludedStatuses.has(a.status)) return false;
         if (visitingTodayOnly && a.visitDate !== todayStr) return false;
+        if (autoGenOnly && !a.autoGenerated) return false;
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
             if (![a.address, a.neighborhood, a.city, a.details, a.contact, a.notes]
@@ -969,17 +1051,17 @@ function buildApp(fitMap = true) {
 
         // Map marker — color reflects status
         const popup = `<div style="text-align:right;font-family:Rubik,sans-serif;max-width:230px;padding:4px;">
-            <span style="display:inline-block;background:#e0e7ff;color:#3730a3;font-size:10px;font-weight:700;padding:1px 8px;border-radius:999px;margin-bottom:4px;">${apt.city} | ${apt.neighborhood||''}</span>
+            <span style="display:inline-block;background:#e0e7ff;color:#3730a3;font-size:10px;font-weight:700;padding:1px 8px;border-radius:999px;margin-bottom:4px;">${esc(apt.city)} | ${esc(apt.neighborhood||'')}</span>
             <div style="display:flex;align-items:baseline;justify-content:space-between;gap:6px;margin-bottom:2px;">
-                <div style="font-weight:700;font-size:13px;">${apt.address}</div>
-                ${apt.link ? `<a href="${apt.link}" target="_blank" style="flex-shrink:0;font-size:11px;font-weight:600;color:#4f46e5;text-decoration:none;white-space:nowrap;">Yad2 <i class="fa-solid fa-up-right-from-square" style="font-size:9px;"></i></a>` : ''}
+                <div style="font-weight:700;font-size:13px;">${esc(apt.address)}</div>
+                ${apt.link ? `<a href="${esc(safeUrl(apt.link))}" target="_blank" style="flex-shrink:0;font-size:11px;font-weight:600;color:#4f46e5;text-decoration:none;white-space:nowrap;">Yad2 <i class="fa-solid fa-up-right-from-square" style="font-size:9px;"></i></a>` : ''}
             </div>
-            <div style="font-size:11px;color:#6b7280;margin-bottom:2px;">${apt.details||''}</div>
+            <div style="font-size:11px;color:#6b7280;margin-bottom:2px;">${esc(apt.details||'')}</div>
             <div style="font-size:12px;font-weight:700;color:#4f46e5;margin-bottom:6px;">₪${apt.price.toLocaleString()}</div>
             ${dist ? `<div style="font-size:10px;color:#9ca3af;margin-bottom:4px;">
                 <i class="fa-solid fa-car" style="color:#ef4444;margin-left:3px;"></i>~${dist.km} ק"מ (~${dist.mins} דק')
             </div>` : ''}
-            ${apt.entryDate ? `<div style="font-size:10px;color:#0369a1;margin-bottom:4px;"><i class="fa-solid fa-key" style="margin-left:3px;"></i>כניסה: ${formatEntryDate(apt.entryDate)}</div>` : ''}
+            ${apt.entryDate ? `<div style="font-size:10px;color:#0369a1;margin-bottom:4px;"><i class="fa-solid fa-key" style="margin-left:3px;"></i>כניסה: ${esc(formatEntryDate(apt.entryDate))}</div>` : ''}
             <div style="border-top:1px solid #f3f4f6;padding-top:6px;display:flex;gap:6px;">
                 <button onclick="openNotesModal(${apt.id})"
                         style="flex:1;font-size:11px;padding:4px 6px;border-radius:6px;border:1px solid #e5e7eb;background:#fffbeb;cursor:pointer;font-family:Rubik,sans-serif;color:#92400e;">
@@ -1007,20 +1089,24 @@ function buildApp(fitMap = true) {
         card.innerHTML = `
             <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-1 mb-1 flex-wrap">
-                    <span class="bg-gray-100 text-gray-700 text-[10px] px-1.5 py-0.5 rounded-md font-medium">${apt.city}</span>
-                    ${apt.neighborhood ? `<span class="bg-indigo-50 text-indigo-700 text-[10px] px-1.5 py-0.5 rounded-md font-medium">${apt.neighborhood}</span>` : ''}
+                    <span class="bg-gray-100 text-gray-700 text-[10px] px-1.5 py-0.5 rounded-md font-medium">${esc(apt.city)}</span>
+                    ${apt.neighborhood ? `<span class="bg-indigo-50 text-indigo-700 text-[10px] px-1.5 py-0.5 rounded-md font-medium">${esc(apt.neighborhood)}</span>` : ''}
                     ${apt.status !== 'interested'
                         ? `<span style="background:${sc.bg}22;color:${sc.bg};font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;">
                                <i class="fa-solid ${sc.icon}" style="font-size:8px;"></i> ${sc.label}</span>`
                         : ''}
+                    ${apt.autoGenerated
+                        ? `<span onclick="event.stopPropagation();dismissAutoGen(${apt.id})" title="הסר תגית" style="background:#fef3c7;color:#92400e;font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;cursor:pointer;">
+                               <i class="fa-solid fa-robot" style="font-size:8px;"></i> נוצר אוטומטית <i class="fa-solid fa-xmark" style="font-size:8px;opacity:.6;"></i></span>`
+                        : ''}
                 </div>
-                <div class="font-bold text-sm text-gray-900 truncate group-hover:text-indigo-900">${apt.address}</div>
-                <div class="text-xs text-gray-500 truncate">${apt.details || ''}</div>
-                ${hasNotes ? `<div class="text-[10px] text-amber-600 mt-0.5 truncate"><i class="fa-solid fa-note-sticky mr-0.5"></i>${apt.notes}</div>` : ''}
+                <div class="font-bold text-sm text-gray-900 truncate group-hover:text-indigo-900">${esc(apt.address)}</div>
+                <div class="text-xs text-gray-500 truncate">${esc(apt.details || '')}</div>
+                ${hasNotes ? `<div class="text-[10px] text-amber-600 mt-0.5 truncate"><i class="fa-solid fa-note-sticky mr-0.5"></i>${esc(apt.notes)}</div>` : ''}
                 ${_mediaCounts[apt.id] ? `<div class="text-[10px] text-emerald-600 mt-0.5"><i class="fa-solid fa-camera mr-0.5"></i>${_mediaCounts[apt.id]} פריטי מדיה</div>` : ''}
-                ${apt.entryDate ? `<div class="text-[10px] text-sky-600 mt-0.5"><i class="fa-solid fa-key mr-0.5"></i>כניסה: ${formatEntryDate(apt.entryDate)}</div>` : ''}
+                ${apt.entryDate ? `<div class="text-[10px] text-sky-600 mt-0.5"><i class="fa-solid fa-key mr-0.5"></i>כניסה: ${esc(formatEntryDate(apt.entryDate))}</div>` : ''}
                 ${apt.visitDate ? `<div class="text-[10px] mt-0.5 ${isToday ? 'text-green-600 font-bold' : 'text-blue-500'}">
-                    <i class="fa-solid fa-calendar${isToday?'-check':''} mr-0.5"></i>${isToday ? 'ביקור היום!' : 'ביקור: ' + formatDate(apt.visitDate)}</div>` : ''}
+                    <i class="fa-solid fa-calendar${isToday?'-check':''} mr-0.5"></i>${isToday ? 'ביקור היום!' : 'ביקור: ' + esc(formatDate(apt.visitDate))}</div>` : ''}
                 ${dist ? `<div class="mt-1 text-xs text-gray-400">
                     <i class="fa-solid fa-car text-red-400 ml-1"></i>~${dist.km} ק"מ (~${dist.mins} דק')
                 </div>` : ''}
@@ -1045,7 +1131,7 @@ function buildApp(fitMap = true) {
                         <i class="fa-solid fa-trash"></i>
                     </button>
                 </div>
-                ${apt.link ? `<a href="${apt.link}" target="_blank" onclick="event.stopPropagation();"
+                ${apt.link ? `<a href="${esc(safeUrl(apt.link))}" target="_blank" onclick="event.stopPropagation();"
                     class="text-[10px] text-gray-400 hover:text-indigo-600 transition">Yad2 <i class="fa-solid fa-up-right-from-square" style="font-size:8px;"></i></a>` : ''}
             </div>`;
 
@@ -1553,7 +1639,6 @@ function _buildExportCard() {
     const sc    = STATUSES.find(s => s.value === apt.status) || STATUSES[0];
     const base  = Number(currentViewing.price) || 0;
     const costs = tpl.questions.filter(q => q.type === 'cost');
-    const esc   = s => (s == null ? '' : String(s).replace(/[&<>]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[c])));
     let total = base;
     costs.forEach(c => total += Number(d.answers[c.id]) || 0);
 
@@ -2146,8 +2231,8 @@ async function doImport() {
         // Fill optional status/notes for imported entries that lack them
         if (!a.status)    a.status    = 'interested';
         if (!a.notes)     a.notes     = '';
-        if (!a.id)        a.id        = Date.now() + i;
-        if (!a.updatedAt) a.updatedAt = Date.now();
+        a.id = Number(a.id) || Date.now() + i;              // force numeric id (it lands in inline onclick handlers)
+        a.updatedAt = Number(a.updatedAt) || Date.now();
     }
     saveApartments(data);
     closeImportModal();
@@ -2165,6 +2250,95 @@ function resetToDefaults() {
     saveApartments([]);
     closeImportModal();
     buildApp();
+}
+
+// ── Yad2 import (pairs with the import-yad2.js CLI, which copies JSON to clipboard) ──
+function openYad2Modal() {
+    document.getElementById('yad2-text').value = '';
+    setYad2Status('', '');
+    document.getElementById('modal-yad2').classList.remove('hidden');
+}
+function closeYad2Modal() { document.getElementById('modal-yad2').classList.add('hidden'); }
+
+function setYad2Status(msg, color) {
+    const el = document.getElementById('yad2-status');
+    el.textContent = msg;
+    el.style.color = color || '#6b7280';
+    el.classList.toggle('hidden', !msg);
+}
+
+async function readYad2Clipboard() {
+    if (!navigator.clipboard || !navigator.clipboard.readText) {
+        setYad2Status('הדפדפן לא מאפשר קריאה מהלוח — הדבק ידנית למטה', '#b45309'); return;
+    }
+    try {
+        const txt = (await navigator.clipboard.readText()).trim();
+        if (!txt) { setYad2Status('הלוח ריק', '#b45309'); return; }
+        document.getElementById('yad2-text').value = txt;
+        importYad2FromText();
+    } catch {
+        setYad2Status('קריאה מהלוח נדחתה — הדבק ידנית למטה', '#b45309');
+    }
+}
+
+async function importYad2FromText() {
+    const raw = document.getElementById('yad2-text').value.trim();
+    if (!raw) { setYad2Status('אין נתונים', '#dc2626'); return; }
+    let data;
+    try { data = JSON.parse(raw); } catch { setYad2Status('JSON לא תקין', '#dc2626'); return; }
+    const items = Array.isArray(data) ? data : [data];
+    setYad2Status('מייבא...', '#6b7280');
+    try {
+        const res = await importYad2Objects(items);
+        const msgs = [];
+        if (res.added)   msgs.push(`נוספו ${res.added}`);
+        if (res.skipped) msgs.push(`קיימות — דילוג ${res.skipped}`);
+        if (res.failed)  msgs.push(`נכשלו ${res.failed}`);
+        setYad2Status(msgs.join(' · ') || 'לא נוספו דירות', res.added ? '#059669' : '#b45309');
+        if (res.added) { buildApp(); document.getElementById('yad2-text').value = ''; }
+    } catch (e) {
+        console.warn('yad2 import failed', e);
+        setYad2Status('הייבוא נכשל', '#dc2626');
+    }
+}
+
+// Validate → dedup by link → geocode missing coords → tag autoGenerated → append.
+async function importYad2Objects(items) {
+    const apts = loadApartments();
+    const existingLinks = new Set(apts.map(a => a.link).filter(Boolean));
+    let added = 0, skipped = 0, failed = 0;
+    for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        if (!it || !it.address || !it.city || typeof it.price !== 'number') { failed++; continue; }
+        if (it.link && existingLinks.has(it.link)) { skipped++; continue; }
+        let coords = Array.isArray(it.coords) && it.coords.length === 2
+            && it.coords.every(n => typeof n === 'number' && n !== 0) ? it.coords : null;
+        if (!coords) coords = await geocodeAddress(`${it.address}, ${it.city}`);
+        if (!coords) { failed++; continue; }
+        const now = Date.now();
+        const apt = {
+            id: now + i, address: it.address, city: it.city, price: it.price, coords,
+            status: 'interested', dateAdded: today(), updatedAt: now, autoGenerated: true,
+        };
+        ['neighborhood', 'details', 'link', 'contact', 'entryDate', 'notes'].forEach(k => { if (it[k]) apt[k] = it[k]; });
+        apts.push(apt);
+        if (apt.link) existingLinks.add(apt.link);
+        added++;
+    }
+    if (added) saveApartments(apts);
+    return { added, skipped, failed };
+}
+
+async function geocodeAddress(query) {
+    try {
+        const q = encodeURIComponent(`${query}, ישראל`);
+        const data = await fetch(
+            `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1&countrycodes=il`,
+            { headers: { 'User-Agent': 'apartment-hunter-poc/1.0' } }
+        ).then(r => r.json());
+        if (data && data.length) return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+    } catch {}
+    return null;
 }
 
 // ── Workplace modal ───────────────────────────────────────────────────────
