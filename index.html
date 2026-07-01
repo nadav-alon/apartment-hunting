@@ -1160,9 +1160,13 @@ function toggleLayer(type) {
 
 async function loadTransitStations() {
     try {
+        // Central Israel bbox (south,west,north,east): Gush Dan + the Sharon + inland —
+        // Rehovot/Rishon up to Netanya/Hadera, coast east to Kfar Saba/Rosh HaAyin/Modiin.
+        // (Herzliya/Ra'anana/Kfar Saba sit ~32.16–32.18N, just past the old 32.13 edge.)
+        const BBOX = '31.80,34.72,32.45,35.05';
         const query = `[out:json][timeout:25];
-(node["railway"~"^(station|halt)$"](31.97,34.74,32.13,34.90);
- node["railway"="tram_stop"](31.97,34.74,32.13,34.90););out body;`;
+(node["railway"~"^(station|halt)$"](${BBOX});
+ node["railway"="tram_stop"](${BBOX}););out body;`;
         const resp = await fetch('https://overpass-api.de/api/interpreter', {
             method: 'POST', body: 'data=' + encodeURIComponent(query)
         });
