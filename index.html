@@ -615,6 +615,7 @@
 // ── Constants ─────────────────────────────────────────────────────────────
 const WORKPLACE_KEY = 'apt-workplace-v1';
 const DATA_KEY = 'apt-hunting-v1';
+const DELETIONS_KEY = 'apt-deletions-v1'; // tombstones: { [id]: deletedAt } so deletes propagate via the Gist
 
 const STATUSES = [
     { value: 'interested',     label: 'מעוניין',    icon: 'fa-heart',          bg: '#4f46e5' },
@@ -672,6 +673,25 @@ function loadApartments() {
 function saveApartments(data) {
     localStorage.setItem(DATA_KEY, JSON.stringify(data));
     gistPushAll();
+}
+
+// Deletion tombstones — { [id]: deletedAt }. Kept so a delete isn't resurrected by
+// mergeApartments (which re-adds any remote-only apartment) and propagates to other devices.
+function loadDeletions() {
+    try { return JSON.parse(localStorage.getItem(DELETIONS_KEY)) || {}; } catch { return {}; }
+}
+function saveDeletions(d) {
+    localStorage.setItem(DELETIONS_KEY, JSON.stringify(d));
+}
+function mergeDeletions(a, b) {
+    const out = { ...a };
+    for (const id in b) out[id] = Math.max(out[id] || 0, b[id]);
+    return out;
+}
+// Drop apartments whose tombstone is at least as new as their last edit (an edit newer
+// than the tombstone means it was intentionally re-added, so it survives).
+function applyDeletions(apts, dels) {
+    return apts.filter(a => !(dels[a.id] >= (a.updatedAt || 0)));
 }
 
 function loadWorkplace() {
@@ -1377,7 +1397,10 @@ function deleteApartment(id) {
     const apt = loadApartments().find(a => a.id === id);
     if (!apt) return;
     if (!confirm(`למחוק את "${apt.address}"?`)) return;
-    saveApartments(loadApartments().filter(a => a.id !== id));
+    const dels = loadDeletions();
+    dels[id] = Date.now();
+    saveDeletions(dels);
+    saveApartments(loadApartments().filter(a => a.id !== id)); // pushes the Gist (payload now carries deletions)
     mediaDeleteByApt(id).then(() => refreshMediaCounts(false));
     buildApp(false);
 }
@@ -2511,7 +2534,7 @@ async function gistPushAll() {
     const cfg = getSyncConfig();
     if (!cfg) return;
     syncDot('syncing');
-    const payload = { v: 2, apartments: loadApartments(), workplace: loadWorkplace(), viewingTemplate: loadTemplate() };
+    const payload = { v: 2, apartments: loadApartments(), workplace: loadWorkplace(), viewingTemplate: loadTemplate(), deletions: loadDeletions() };
     try {
         const r = await fetch(`https://api.github.com/gists/${cfg.gistId}`, {
             method: 'PATCH',
@@ -2534,8 +2557,8 @@ async function gistRead() {
         if (!content) { syncDot('error'); return null; }
         syncDot('ok');
         const parsed = JSON.parse(content);
-        if (Array.isArray(parsed)) return { apartments: parsed, workplace: null, viewingTemplate: null }; // v1 format
-        return { apartments: parsed.apartments || [], workplace: parsed.workplace || null, viewingTemplate: parsed.viewingTemplate || null };
+        if (Array.isArray(parsed)) return { apartments: parsed, workplace: null, viewingTemplate: null, deletions: {} }; // v1 format
+        return { apartments: parsed.apartments || [], workplace: parsed.workplace || null, viewingTemplate: parsed.viewingTemplate || null, deletions: parsed.deletions || {} };
     } catch { syncDot('error'); return null; }
 }
 
@@ -2552,14 +2575,19 @@ async function syncFromGist() {
     const remote = await gistRead();
     if (!remote) return;
     const { apartments: remoteApts, workplace: remoteWp, viewingTemplate: remoteTpl } = remote;
+    const dels   = mergeDeletions(loadDeletions(), remote.deletions || {});
+    saveDeletions(dels);
     const local  = loadApartments();
-    const merged = mergeApartments(local, remoteApts);
+    const merged = applyDeletions(mergeApartments(local, remoteApts), dels);
     localStorage.setItem(DATA_KEY, JSON.stringify(merged));
     if (remoteWp)  localStorage.setItem(WORKPLACE_KEY, JSON.stringify(remoteWp));
     if (remoteTpl) localStorage.setItem(TEMPLATE_KEY, JSON.stringify(remoteTpl));
-    // Push back if local had newer entries, or if remote lacked workplace/template (needs upgrade)
+    // Push back if local had newer entries/tombstones, or if remote lacked workplace/template (needs upgrade)
     const remoteKeys = new Set(remoteApts.map(a => `${a.id}:${a.updatedAt||0}`));
-    if (!remoteWp || !remoteTpl || merged.some(a => !remoteKeys.has(`${a.id}:${a.updatedAt||0}`))) gistPushAll();
+    const delChanged = JSON.stringify(dels) !== JSON.stringify(remote.deletions || {});
+    const remoteHasDeleted = remoteApts.some(a => dels[a.id] >= (a.updatedAt || 0));
+    if (!remoteWp || !remoteTpl || delChanged || remoteHasDeleted
+        || merged.some(a => !remoteKeys.has(`${a.id}:${a.updatedAt||0}`))) gistPushAll();
     buildApp(false);
 }
 
@@ -2571,7 +2599,7 @@ async function findOrCreateGist(token) {
     if (existing) return existing.id;
     const created = await fetch('https://api.github.com/gists', {
         method: 'POST', headers: h,
-        body: JSON.stringify({ description: GIST_DESC, public: false, files: { [GIST_FILE]: { content: JSON.stringify({ v: 2, apartments: loadApartments(), workplace: loadWorkplace(), viewingTemplate: loadTemplate() }) } } })
+        body: JSON.stringify({ description: GIST_DESC, public: false, files: { [GIST_FILE]: { content: JSON.stringify({ v: 2, apartments: loadApartments(), workplace: loadWorkplace(), viewingTemplate: loadTemplate(), deletions: loadDeletions() }) } } })
     }).then(r => r.json());
     if (!created.id) throw new Error('יצירת Gist נכשלה');
     return created.id;

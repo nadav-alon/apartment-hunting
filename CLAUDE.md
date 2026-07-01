@@ -7,6 +7,7 @@ Single-file app: everything lives in `index.html`. No build step, no bundler, no
 ```js
 const WORKPLACE_KEY  = 'apt-workplace-v1';   // localStorage key for central hub
 const DATA_KEY       = 'apt-hunting-v1';     // localStorage key for apartments array
+const DELETIONS_KEY  = 'apt-deletions-v1';   // localStorage key for tombstones { id: deletedAt }
 const SYNC_KEY       = 'apt-sync-v1';        // localStorage key for { token, gistId }
 const ONBOARDING_KEY = 'apt-onboarding-v1';  // localStorage flag (set to '1' on dismiss)
 const GIST_FILE      = 'apartments.json';
@@ -23,9 +24,12 @@ const GIST_DESC      = 'apartment-hunting-sync';
   "viewingTemplate": {
     "questions": [ { "id": "...", "section": "...", "label": "...", "type": "cost" } ],
     "checklist": [ { "id": "...", "section": "...", "label": "..." } ]
-  }
+  },
+  "deletions": { "<id>": 1700000000000 }
 }
 ```
+
+`deletions` is a tombstone map (`id → deletedAt`) so a delete propagates instead of being resurrected by the merge. `gistRead()` defaults it to `{}` (incl. v1).
 
 A question with `"type": "cost"` (e.g. `arnona`, `vaad`) renders as a numeric ₪ input instead of a textarea; its value is stored in `viewing.answers[id]` like any answer, and added on top of the base rent in a live price breakdown (see Viewing mode). Questions without a `type` are plain textareas.
 
@@ -101,6 +105,7 @@ function makeIcon(bg, faClass, size, pulse) {
 | `gistRead()` | GET the Gist; returns `{ apartments, workplace }` or `null` |
 | `syncFromGist()` | Pull → merge → write-back if local was newer |
 | `mergeApartments(local, remote)` | Per-apartment merge by `updatedAt` (newer wins) |
+| `mergeDeletions(a, b)` / `applyDeletions(apts, dels)` | Merge tombstone maps (max `deletedAt`); drop apartments a tombstone covers |
 | `buildApp(fitMap?)` | Re-render sidebar list + map markers from localStorage |
 | `updateWorkplaceDisplay()` | Refresh sidebar bar + map marker from `loadWorkplace()` |
 | `openWorkplaceModal()` | Show the workplace setup/edit modal |
@@ -169,8 +174,10 @@ Breakpoint: `md:` (768px). Below that:
 
 On `syncFromGist()`:
 1. Merge arrays by `updatedAt` (newer timestamp wins per `id`)
-2. If local had any apartment not matching remote's `{id}:{updatedAt}` fingerprint, write merged result back to Gist
-3. Deletions are not tombstoned — an apartment deleted on one device reappears on next sync from a device that still has it
+2. Merge deletion tombstones (`mergeDeletions`, max `deletedAt` per id), then drop tombstoned apartments (`applyDeletions`: removed when `deletedAt >= updatedAt`, so an edit newer than the tombstone un-deletes)
+3. Push back if local had newer entries, new/changed tombstones, remote still lists a tombstoned apartment, or remote lacked workplace/template
+
+**Deletion tombstones:** `deleteApartment` records `deletions[id] = Date.now()` (localStorage `apt-deletions-v1`, synced in the Gist payload). Without this, `mergeApartments` — which re-adds any remote-only apartment — resurrected deletes on the next sync (and pushed them back to the Gist). Tombstones aren't pruned; re-imports get a fresh `id` so an old tombstone never blocks them.
 
 ## Yad2 import
 
