@@ -645,6 +645,7 @@ const DEFAULT_TEMPLATE = {
         { id: 'bike_store',  section: 'לוגיסטיקה ועלויות', label: 'יש מקום בטוח לאחסון אופניים?' },
         { id: 'arnona',      section: 'לוגיסטיקה ועלויות', label: 'ארנונה (חודשי)', type: 'cost' },
         { id: 'vaad',        section: 'לוגיסטיקה ועלויות', label: 'ועד בית (חודשי)', type: 'cost' },
+        { id: 'brokerage',   section: 'לוגיסטיקה ועלויות', label: 'תיווך (חודש שכירות, מחולק על השנה)', type: 'brokerage' },
         { id: 'maintenance', section: 'מדיניות וכללים',    label: 'נוהל תחזוקה ותיקונים — מי מטפל?' },
         { id: 'guests_pets', section: 'מדיניות וכללים',    label: 'כללים/תשלומים לגבי אורחים או חיות מחמד?' },
         { id: 'lease_break', section: 'מדיניות וכללים',    label: 'מדיניות שבירת חוזה מוקדמת או השכרת משנה?' },
@@ -1665,14 +1666,17 @@ function _buildExportCard() {
     const tpl   = loadTemplate();
     const sc    = STATUSES.find(s => s.value === apt.status) || STATUSES[0];
     const base  = Number(currentViewing.price) || 0;
-    const costs = tpl.questions.filter(q => q.type === 'cost');
+    const costs = tpl.questions.filter(q => q.type === 'cost' || q.type === 'brokerage');
+    const costAmt = c => c.type === 'brokerage'
+        ? (d.answers[c.id] ? Math.round(base / 12) : 0)
+        : (Number(d.answers[c.id]) || 0);
     let total = base;
-    costs.forEach(c => total += Number(d.answers[c.id]) || 0);
+    costs.forEach(c => total += costAmt(c));
 
     // Price breakdown rows
     const priceRows = [`<div style="display:flex;justify-content:space-between;font-size:13px;color:#374151;margin-bottom:4px;"><span>שכירות</span><span>${base.toLocaleString()} ₪</span></div>`];
     costs.forEach(c => {
-        const amt = Number(d.answers[c.id]) || 0;
+        const amt = costAmt(c);
         if (amt > 0) priceRows.push(`<div style="display:flex;justify-content:space-between;font-size:13px;color:#374151;margin-bottom:4px;"><span>+ ${esc(c.label)}</span><span>${amt.toLocaleString()} ₪</span></div>`);
     });
     priceRows.push(`<div style="display:flex;justify-content:space-between;font-size:15px;font-weight:700;color:#312e81;border-top:1px solid #c7d2fe;padding-top:6px;margin-top:2px;"><span>סה״כ חודשי</span><span>${total.toLocaleString()} ₪</span></div>`);
@@ -1680,8 +1684,9 @@ function _buildExportCard() {
     const body = [`<div style="background:#eef2ff;border:1px solid #e0e7ff;border-radius:10px;padding:12px;margin-bottom:12px;">${priceRows.join('')}</div>`];
 
     // Answered questions (skip cost + empty), grouped by section
-    [...new Set(tpl.questions.filter(q => q.type !== 'cost').map(q => q.section))].forEach(sec => {
-        const qs = tpl.questions.filter(q => q.section === sec && q.type !== 'cost' && (d.answers[q.id] || '').trim());
+    const isCostLike = q => q.type === 'cost' || q.type === 'brokerage';
+    [...new Set(tpl.questions.filter(q => !isCostLike(q)).map(q => q.section))].forEach(sec => {
+        const qs = tpl.questions.filter(q => q.section === sec && !isCostLike(q) && (d.answers[q.id] || '').trim());
         if (!qs.length) return;
         body.push(`<div style="font-size:12px;font-weight:700;color:#4338ca;margin:12px 0 4px;">${esc(sec)}</div>`);
         qs.forEach(q => body.push(`<div style="margin-bottom:7px;"><div style="font-size:11px;color:#6b7280;">${esc(q.label)}</div><div style="font-size:13px;color:#111827;white-space:pre-wrap;">${esc(d.answers[q.id])}</div></div>`));
@@ -1822,10 +1827,44 @@ function _vCostRow(id, label, val) {
     return wrap;
 }
 
+// Brokerage fee: a one-time month's rent, amortized over the year (base/12) and added
+// to the monthly breakdown when ticked. Stored as a boolean in answers[id].
+function _vBrokerageRow(id, label) {
+    const on = !!currentViewing.data.answers[id];
+    const wrap = document.createElement('div');
+    wrap.className = 'bg-white rounded-lg border border-gray-100 p-2.5 shadow-sm mb-2';
+    const row = document.createElement('div');
+    row.className = 'flex items-center gap-2';
+    const left = document.createElement('div');
+    left.className = 'flex-1 min-w-0';
+    const lbl = document.createElement('div');
+    lbl.className = 'text-sm text-gray-700 font-medium';
+    lbl.textContent = label;
+    const sub = document.createElement('div');
+    sub.className = 'text-[11px] text-gray-400';
+    const amt = Math.round((Number(currentViewing.price) || 0) / 12);
+    sub.textContent = 'תוספת חודשית של ' + amt.toLocaleString() + ' ₪';
+    left.append(lbl, sub);
+    const box = document.createElement('span');
+    box.className = 'w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 border-2 '
+        + (on ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-gray-300 text-transparent');
+    box.innerHTML = '<i class="fa-solid fa-check" style="font-size:12px;"></i>';
+    row.append(left, box);
+    wrap.append(row);
+    wrap.style.cursor = 'pointer';
+    wrap.onclick = () => {
+        currentViewing.data.answers[id] = !currentViewing.data.answers[id];
+        persistViewing();
+        updateCostSummary();
+        wrap.replaceWith(_vBrokerageRow(id, label));
+    };
+    return wrap;
+}
+
 // Live price breakdown: base rent + each cost field = total monthly.
 function buildCostSummary(box) {
     box.innerHTML = '';
-    const costs = loadTemplate().questions.filter(q => q.type === 'cost');
+    const costs = loadTemplate().questions.filter(q => q.type === 'cost' || q.type === 'brokerage');
     if (!costs.length) return;
     box.className = 'bg-indigo-50 border border-indigo-200 rounded-lg p-3 mb-2';
     const mkRow = (label, amount, isTotal) => {
@@ -1841,7 +1880,10 @@ function buildCostSummary(box) {
     let total = base;
     box.appendChild(mkRow('מחיר שכירות', base, false));
     costs.forEach(c => {
-        const amt = Number(currentViewing.data.answers[c.id]) || 0;
+        const amt = c.type === 'brokerage'
+            ? (currentViewing.data.answers[c.id] ? Math.round(base / 12) : 0)
+            : (Number(currentViewing.data.answers[c.id]) || 0);
+        if (c.type === 'brokerage' && !currentViewing.data.answers[c.id]) return;
         total += amt;
         box.appendChild(mkRow('+ ' + c.label, amt, false));
     });
@@ -1921,9 +1963,10 @@ function renderViewing() {
         body.appendChild(_vSectionHeader(sec, 'fa-comments'));
         const secQs = tpl.questions.filter(q => q.section === sec);
         secQs.forEach(q => body.appendChild(
-            q.type === 'cost' ? _vCostRow(q.id, q.label, d.answers[q.id] || '')
-                              : _vQuestionRow(q.id, q.label, d.answers[q.id] || '')));
-        if (secQs.some(q => q.type === 'cost')) {
+            q.type === 'cost'      ? _vCostRow(q.id, q.label, d.answers[q.id] || '')
+          : q.type === 'brokerage' ? _vBrokerageRow(q.id, q.label)
+                                   : _vQuestionRow(q.id, q.label, d.answers[q.id] || '')));
+        if (secQs.some(q => q.type === 'cost' || q.type === 'brokerage')) {
             const box = document.createElement('div');
             box.id = 'viewing-cost-summary';
             buildCostSummary(box);
