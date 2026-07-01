@@ -567,9 +567,14 @@ const DEFAULT_TEMPLATE = {
         { id: 'neighbors',   section: 'בעל הדירה ושכנים', label: 'איך השכנים? (רעש, אווירה, בעיות?)' },
         { id: 'instruments', section: 'בעל הדירה ושכנים', label: 'אפשר לנגן בכלים? תופים אלקטרוניים?' },
         { id: 'fiber',       section: 'לוגיסטיקה ועלויות', label: 'יש אינטרנט סיבים אופטיים?' },
-        { id: 'utilities',   section: 'לוגיסטיקה ועלויות', label: 'עלויות חשמל/מים/ארנונה ממוצעות (קיץ/חורף)?' },
+        { id: 'utilities',   section: 'לוגיסטיקה ועלויות', label: 'עלויות חשמל/מים ממוצעות (קיץ/חורף)?' },
         { id: 'parking',     section: 'לוגיסטיקה ועלויות', label: 'מצב החניה? (מוקצית, אורחים, חניונים בקרבת מקום)' },
         { id: 'furniture',   section: 'לוגיסטיקה ועלויות', label: 'אילו רהיטים נשארים ומה צריך להביא?' },
+        { id: 'laundry_loc', section: 'לוגיסטיקה ועלויות', label: 'מיקום מכונת כביסה ומייבש?' },
+        { id: 'room_dims',   section: 'לוגיסטיקה ועלויות', label: 'מידות הסלון ומידות חדרי השינה?' },
+        { id: 'bike_store',  section: 'לוגיסטיקה ועלויות', label: 'יש מקום בטוח לאחסון אופניים?' },
+        { id: 'arnona',      section: 'לוגיסטיקה ועלויות', label: 'ארנונה (חודשי)', type: 'cost' },
+        { id: 'vaad',        section: 'לוגיסטיקה ועלויות', label: 'ועד בית (חודשי)', type: 'cost' },
         { id: 'maintenance', section: 'מדיניות וכללים',    label: 'נוהל תחזוקה ותיקונים — מי מטפל?' },
         { id: 'guests_pets', section: 'מדיניות וכללים',    label: 'כללים/תשלומים לגבי אורחים או חיות מחמד?' },
         { id: 'lease_break', section: 'מדיניות וכללים',    label: 'מדיניות שבירת חוזה מוקדמת או השכרת משנה?' },
@@ -614,11 +619,25 @@ function saveWorkplace(wp) {
 }
 
 function loadTemplate() {
+    let t;
     try {
         const raw = localStorage.getItem(TEMPLATE_KEY);
-        if (raw) return JSON.parse(raw);
+        if (raw) t = JSON.parse(raw);
     } catch {}
-    return DEFAULT_TEMPLATE;
+    return _withDefaults(t || DEFAULT_TEMPLATE);
+}
+
+// Union in any DEFAULT_TEMPLATE questions/checklist items missing (by id) from the
+// stored template. Ensures code-backed defaults added in later versions (e.g. the
+// 'cost' fields) appear even for users whose template was synced before they existed.
+function _withDefaults(t) {
+    const q = Array.isArray(t.questions) ? t.questions.slice() : [];
+    const c = Array.isArray(t.checklist) ? t.checklist.slice() : [];
+    const qIds = new Set(q.map(x => x.id));
+    const cIds = new Set(c.map(x => x.id));
+    DEFAULT_TEMPLATE.questions.forEach(dq => { if (!qIds.has(dq.id)) q.push(dq); });
+    DEFAULT_TEMPLATE.checklist.forEach(dc => { if (!cIds.has(dc.id)) c.push(dc); });
+    return { ...t, questions: q, checklist: c };
 }
 
 function saveTemplate(t) {
@@ -1345,7 +1364,7 @@ function saveNotes() {
 }
 
 // ── Viewing mode ──────────────────────────────────────────────────────────
-let currentViewing = null;       // { id, data }
+let currentViewing = null;       // { id, data, price }
 let _viewingPushTimer = null;
 
 function _blankViewing() { return { answers: {}, checklist: {}, extra: [], doneAt: null }; }
@@ -1366,7 +1385,7 @@ function openViewing(id) {
     data.answers   = data.answers   || {};
     data.checklist = data.checklist || {};
     data.extra     = data.extra     || [];
-    currentViewing = { id, data };
+    currentViewing = { id, data, price: apt.price };
     document.getElementById('viewing-title').textContent = apt.address;
     renderViewing();
     document.getElementById('viewing-body').scrollTop = 0;
@@ -1441,6 +1460,79 @@ function _vQuestionRow(id, label, val) {
     return wrap;
 }
 
+// Numeric cost question (e.g. arnona / vaad bait) — its value is added on top of
+// the apartment's base rent in the live breakdown (see buildCostSummary).
+function _vCostRow(id, label, val) {
+    const wrap = document.createElement('div');
+    wrap.className = 'bg-white rounded-lg border border-gray-100 p-2.5 shadow-sm mb-2';
+    const row = document.createElement('div');
+    row.className = 'flex items-center gap-2';
+    const left = document.createElement('div');
+    left.className = 'flex-1 min-w-0';
+    const lbl = document.createElement('div');
+    lbl.className = 'text-sm text-gray-700 font-medium';
+    lbl.textContent = label;
+    const sub = document.createElement('div');
+    sub.className = 'text-[11px] text-gray-400';
+    sub.textContent = 'תוספת חודשית למחיר';
+    left.append(lbl, sub);
+    const inWrap = document.createElement('div');
+    inWrap.className = 'flex items-center gap-1 flex-shrink-0';
+    const plus = document.createElement('span');
+    plus.className = 'text-indigo-400 text-sm font-bold';
+    plus.textContent = '+';
+    const inp = document.createElement('input');
+    inp.type = 'number';
+    inp.inputMode = 'numeric';
+    inp.min = '0';
+    inp.className = 'w-20 border rounded-lg px-2 py-1.5 text-sm text-left focus:outline-none focus:ring-2 focus:ring-indigo-300';
+    inp.placeholder = '0';
+    inp.value = val;
+    const unit = document.createElement('span');
+    unit.className = 'text-gray-400 text-sm';
+    unit.textContent = '₪';
+    inp.addEventListener('input', () => {
+        currentViewing.data.answers[id] = inp.value;
+        persistViewing();
+        updateCostSummary();
+    });
+    inWrap.append(plus, inp, unit);
+    row.append(left, inWrap);
+    wrap.append(row);
+    return wrap;
+}
+
+// Live price breakdown: base rent + each cost field = total monthly.
+function buildCostSummary(box) {
+    box.innerHTML = '';
+    const costs = loadTemplate().questions.filter(q => q.type === 'cost');
+    if (!costs.length) return;
+    box.className = 'bg-indigo-50 border border-indigo-200 rounded-lg p-3 mb-2';
+    const mkRow = (label, amount, isTotal) => {
+        const r = document.createElement('div');
+        r.className = 'flex items-center justify-between text-sm '
+            + (isTotal ? 'font-bold text-indigo-900 border-t border-indigo-200 pt-1.5 mt-1.5' : 'text-gray-600');
+        const l = document.createElement('span'); l.textContent = label;
+        const v = document.createElement('span'); v.textContent = amount.toLocaleString() + ' ₪';
+        r.append(l, v);
+        return r;
+    };
+    const base = Number(currentViewing.price) || 0;
+    let total = base;
+    box.appendChild(mkRow('מחיר שכירות', base, false));
+    costs.forEach(c => {
+        const amt = Number(currentViewing.data.answers[c.id]) || 0;
+        total += amt;
+        box.appendChild(mkRow('+ ' + c.label, amt, false));
+    });
+    box.appendChild(mkRow('סה״כ חודשי', total, true));
+}
+
+function updateCostSummary() {
+    const box = document.getElementById('viewing-cost-summary');
+    if (box) buildCostSummary(box);
+}
+
 function _vExtraRow(ex) {
     const wrap = document.createElement('div');
     wrap.className = 'bg-white rounded-lg border border-gray-100 p-2.5 shadow-sm mb-2';
@@ -1507,8 +1599,16 @@ function renderViewing() {
     // Questions, grouped by section
     [...new Set(tpl.questions.map(q => q.section))].forEach(sec => {
         body.appendChild(_vSectionHeader(sec, 'fa-comments'));
-        tpl.questions.filter(q => q.section === sec)
-            .forEach(q => body.appendChild(_vQuestionRow(q.id, q.label, d.answers[q.id] || '')));
+        const secQs = tpl.questions.filter(q => q.section === sec);
+        secQs.forEach(q => body.appendChild(
+            q.type === 'cost' ? _vCostRow(q.id, q.label, d.answers[q.id] || '')
+                              : _vQuestionRow(q.id, q.label, d.answers[q.id] || '')));
+        if (secQs.some(q => q.type === 'cost')) {
+            const box = document.createElement('div');
+            box.id = 'viewing-cost-summary';
+            buildCostSummary(box);
+            body.appendChild(box);
+        }
     });
 
     // Per-apartment extra questions

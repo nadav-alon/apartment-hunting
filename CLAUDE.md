@@ -21,13 +21,17 @@ const GIST_DESC      = 'apartment-hunting-sync';
   "apartments": [ /* apartment objects */ ],
   "workplace": { "name": "...", "address": "...", "coords": [lat, lon] },
   "viewingTemplate": {
-    "questions": [ { "id": "...", "section": "...", "label": "..." } ],
+    "questions": [ { "id": "...", "section": "...", "label": "...", "type": "cost" } ],
     "checklist": [ { "id": "...", "section": "...", "label": "..." } ]
   }
 }
 ```
 
+A question with `"type": "cost"` (e.g. `arnona`, `vaad`) renders as a numeric ₪ input instead of a textarea; its value is stored in `viewing.answers[id]` like any answer, and added on top of the base rent in a live price breakdown (see Viewing mode). Questions without a `type` are plain textareas.
+
 `gistRead()` returns `{ apartments, workplace, viewingTemplate }` with backward compat for v1 (plain array → both null). When `workplace` or `viewingTemplate` is missing in the remote, `gistPushAll()` is called immediately to upgrade the Gist (the local defaults — `DEFAULT_TEMPLATE`, etc. — get written up). Users customize their template by editing the `viewingTemplate` field directly in the Gist.
+
+`loadTemplate()` runs the stored template through `_withDefaults()`, which unions in any `DEFAULT_TEMPLATE` questions/checklist items missing **by id**. This guarantees code-backed defaults (e.g. new `cost` fields) appear even for templates that were synced before those fields existed. Side effect: a default the user deliberately deleted from their Gist will be re-added.
 
 ## Apartment object shape
 
@@ -96,7 +100,7 @@ function makeIcon(bg, faClass, size, pulse) {
 | `updateWorkplaceDisplay()` | Refresh sidebar bar + map marker from `loadWorkplace()` |
 | `openWorkplaceModal()` | Show the workplace setup/edit modal |
 | `showOnboarding()` | Show onboarding if `ONBOARDING_KEY` not set |
-| `loadTemplate()` | Viewing template from localStorage; falls back to `DEFAULT_TEMPLATE` |
+| `loadTemplate()` | Viewing template from localStorage (falls back to `DEFAULT_TEMPLATE`), run through `_withDefaults()` to union in missing default questions/checklist by id |
 | `openViewing(id)` | Open full-screen viewing mode for an apartment |
 | `persistViewing(immediate?)` | Save viewing draft to localStorage; debounced (2.5s) Gist push unless `immediate` |
 | `finishViewing()` | "סיים ביקור" — stamp `doneAt`, auto-advance status to `visited`, push |
@@ -128,6 +132,7 @@ Full-screen overlay (`#viewing-mode`, `z-[70]`, opaque) for use while physically
 
 - **Entry points:** clipboard icon on each apartment card (emerald when `aptHasViewing` is true), and a "מצב ביקור" button at the top of the notes tab.
 - **Three sections:** template questions (label + textarea, grouped by `section`), per-apartment extra questions (editable label + answer + delete), and a tap-to-tick field checklist.
+- **Cost fields:** questions with `type: 'cost'` render via `_vCostRow` (numeric ₪ input). After the section that contains them, `buildCostSummary()` renders a live breakdown box (`#viewing-cost-summary`): base rent + each cost = total monthly. `updateCostSummary()` rebuilds it on every keystroke. Base rent comes from `currentViewing.price` (stashed in `openViewing`).
 - **Persistence:** every input writes localStorage immediately with a fresh `updatedAt` (so a mid-visit `syncFromGist` keeps local via the merge), and schedules a debounced (2.5s) Gist push. "חזרה" pushes immediately; "סיים ביקור" pushes and advances status to `visited`.
 - **Template:** global default (`DEFAULT_TEMPLATE`) synced into the Gist as `viewingTemplate`; per-user customization is done by editing that Gist field. Per-apartment extras live on `apt.viewing.extra`.
 - **Photos/videos:** captured/picked via `<input accept="image/*,video/*">`, shown as a 3-col thumbnail grid with a tap-to-open lightbox. See Media storage below.
